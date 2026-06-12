@@ -156,6 +156,31 @@ static bool parse_json(const char* json, UsageData* out) {
 static char cmd_buf[CMD_BUF_SIZE];
 static int cmd_pos = 0;
 
+static void select_screen(const char* name) {
+    struct ScreenCommand {
+        const char* name;
+        screen_t screen;
+    };
+    static const ScreenCommand commands[] = {
+        {"selector", SCREEN_SELECTOR},
+        {"claude-splash", SCREEN_SPLASH},
+        {"claude-usage", SCREEN_USAGE_CLAUDE},
+        {"codex-splash", SCREEN_SPLASH_CODEX},
+        {"codex-usage", SCREEN_USAGE_CODEX},
+        {"cursor-splash", SCREEN_SPLASH_CURSOR},
+        {"cursor-usage", SCREEN_USAGE_CURSOR},
+    };
+
+    for (const ScreenCommand& command : commands) {
+        if (strcmp(name, command.name) == 0) {
+            ui_show_screen(command.screen);
+            Serial.printf("SCREEN_SELECTED %s\n", name);
+            return;
+        }
+    }
+    Serial.println("SCREEN_UNKNOWN");
+}
+
 static void send_screenshot() {
 #ifndef BOARD_HAS_PSRAM
     // A full RGB565 framebuffer doesn't fit in internal SRAM on PSRAM-free
@@ -200,6 +225,7 @@ static void check_serial_cmd() {
         if (c == '\n' || c == '\r') {
             cmd_buf[cmd_pos] = '\0';
             if (strcmp(cmd_buf, "screenshot") == 0) send_screenshot();
+            else if (strncmp(cmd_buf, "screen ", 7) == 0) select_screen(cmd_buf + 7);
             cmd_pos = 0;
         } else if (cmd_pos < CMD_BUF_SIZE - 1) {
             cmd_buf[cmd_pos++] = c;
