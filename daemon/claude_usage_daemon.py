@@ -21,7 +21,9 @@ import httpx
 from bleak import BleakClient, BleakScanner
 from bleak.exc import BleakError
 
-DEVICE_NAME = "Clawdmeter"
+from usage_sources import gather_all_usage
+
+DEVICE_NAME = "Tokenmeter"
 SERVICE_UUID = "4c41555a-4465-7669-6365-000000000001"
 RX_CHAR_UUID = "4c41555a-4465-7669-6365-000000000002"
 REQ_CHAR_UUID = "4c41555a-4465-7669-6365-000000000004"
@@ -374,14 +376,13 @@ async def connect_and_run(target, stop_event: asyncio.Event) -> bool:
             if session.refresh_requested.is_set() or elapsed >= POLL_INTERVAL:
                 session.refresh_requested.clear()
                 token = read_token()
+                claude_poll = await poll_api(token) if token else None
                 if not token:
-                    log("No token; skipping poll")
-                else:
-                    payload = await poll_api(token)
-                    if payload is not None:
-                        if await session.write_payload(payload):
-                            last_poll = time.time()
-                            used_successfully = True
+                    log("No Claude token; Claude svc will be ok=false")
+                payload = await gather_all_usage(claude_poll)
+                if await session.write_payload(payload):
+                    last_poll = time.time()
+                    used_successfully = True
 
             try:
                 await asyncio.wait_for(session.refresh_requested.wait(), timeout=TICK)
@@ -449,7 +450,21 @@ async def main() -> None:
             backoff = 1
 
 
+async def print_usage() -> None:
+    """Standalone test: gather all three sources and print combined JSON."""
+    token = read_token()
+    claude_poll = await poll_api(token) if token else None
+    payload = await gather_all_usage(claude_poll)
+    print(json.dumps(payload, separators=(",", ":")))
+
+
 if __name__ == "__main__":
+    if "--print-usage" in sys.argv:
+        try:
+            asyncio.run(print_usage())
+        except KeyboardInterrupt:
+            sys.exit(0)
+        sys.exit(0)
     try:
         asyncio.run(main())
     except KeyboardInterrupt:

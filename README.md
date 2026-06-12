@@ -1,3 +1,21 @@
+# Tokenmeter
+
+An ESP32 desk display that tracks **Claude Code, OpenAI Codex, and Cursor** usage in one little gadget.
+
+Inspired by — and built on top of — [HermannBjorgvin/Clawdmeter](https://github.com/HermannBjorgvin/Clawdmeter), a lovely Claude Code usage meter. Tokenmeter extends it to three services:
+
+- **Three services, three screens** — boot into a selector with animated pixel logos (Clawd, the OpenAI blossom, the Cursor cube); tap a logo for that service's animation splash, tap again for its usage page in the original Clawdmeter layout.
+- **Multi-source daemon (macOS)** — alongside the Claude API poller, the daemon reads Codex rate limits from local `~/.codex` session logs and Cursor usage from the Cursor dashboard API, and ships everything in one backward-compatible BLE payload (`svc` object).
+- **Per-brand UI** — each service keeps its own pixel art and styling; the whimsical spinner verbs stay Claude-only.
+- **BLE name** is `Tokenmeter`.
+- Tested on the **Waveshare ESP32-S3-Touch-AMOLED-1.8** (`waveshare_amoled_18` env).
+
+> Note: in addition to the original project's licensing warning below, Tokenmeter renders the Cursor and OpenAI logo marks on-device. Those are third-party trademarks — fine for a personal desk gadget, but don't redistribute hardware/binaries with them without checking the brand guidelines.
+
+The original Clawdmeter README follows — its flashing, pairing, and daemon instructions all still apply (use the `waveshare_amoled_18` env and the multi-service daemon in `daemon/`).
+
+---
+
 # Clawdmeter
 
 A small ESP32 dashboard I made for my desk to keep an eye on Claude Code usage.

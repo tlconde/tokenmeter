@@ -3,7 +3,7 @@
 #include <NimBLEDevice.h>
 #include <NimBLEHIDDevice.h>
 
-#define DEVICE_NAME "Clawdmeter"
+#define DEVICE_NAME "Tokenmeter"
 
 // Custom GATT UUIDs for data channel
 #define SERVICE_UUID        "4c41555a-4465-7669-6365-000000000001"

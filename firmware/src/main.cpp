@@ -96,6 +96,19 @@ static void my_touch_cb(lv_indev_t* indev, lv_indev_data_t* data) {
     }
 }
 
+static void parse_service(JsonObjectConst obj, ServiceUsage* svc) {
+    if (obj.isNull()) {
+        svc->present = false;
+        return;
+    }
+    svc->present = true;
+    svc->session_pct = obj["s"] | 0.0f;
+    svc->session_reset_mins = obj["sr"] | -1;
+    svc->weekly_pct = obj["w"] | 0.0f;
+    svc->weekly_reset_mins = obj["wr"] | -1;
+    svc->ok = obj["ok"] | false;
+}
+
 // Parse a JSON line into UsageData.
 static bool parse_json(const char* json, UsageData* out) {
     JsonDocument doc;
@@ -111,6 +124,29 @@ static bool parse_json(const char* json, UsageData* out) {
     out->weekly_reset_mins = doc["wr"] | -1;
     strlcpy(out->status, doc["st"] | "unknown", sizeof(out->status));
     out->ok = doc["ok"] | false;
+
+    JsonObjectConst svc = doc["svc"];
+    out->has_svc = !svc.isNull();
+    if (out->has_svc) {
+        parse_service(svc["cl"], &out->cl);
+        parse_service(svc["cx"], &out->cx);
+        parse_service(svc["cu"], &out->cu);
+        // Top-level fields remain Claude values; fill cl from svc when present,
+        // otherwise inherit top-level for partial payloads.
+        if (!out->cl.present) {
+            out->cl.present = true;
+            out->cl.session_pct = out->session_pct;
+            out->cl.session_reset_mins = out->session_reset_mins;
+            out->cl.weekly_pct = out->weekly_pct;
+            out->cl.weekly_reset_mins = out->weekly_reset_mins;
+            out->cl.ok = out->ok;
+        }
+    } else {
+        out->cl = {};
+        out->cx = {};
+        out->cu = {};
+    }
+
     out->valid = true;
     return true;
 }
@@ -220,7 +256,7 @@ void setup() {
     ui_init();
     ui_update_ble_status(ble_get_state(), ble_get_device_name(), ble_get_mac_address());
     ui_update_battery(power_hal_battery_pct(), power_hal_is_charging());
-    ui_show_screen(SCREEN_SPLASH);
+    ui_show_screen(SCREEN_SELECTOR);
 
     Serial.printf("Dashboard ready (%s, %dx%d), waiting for data on BLE...\n",
         board_caps().name, W, H);
