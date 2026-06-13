@@ -10,6 +10,19 @@ Inspired by — and built on top of — [HermannBjorgvin/Clawdmeter](https://git
 - **BLE name** is `Tokenmeter`.
 - Tested on the **Waveshare ESP32-S3-Touch-AMOLED-1.8** (`waveshare_amoled_18` env).
 
+### Tokenmeter screens
+
+All images below are native 368×448 framebuffer captures from the
+Waveshare AMOLED 1.8 device.
+
+| Selector | Claude animation | Claude usage | Codex animation |
+| :------: | :--------------: | :----------: | :-------------: |
+| ![Service selector](screenshots/amoled_18/selector.png) | ![Claude animation](screenshots/amoled_18/claude-splash.png) | ![Claude usage](screenshots/amoled_18/claude-usage.png) | ![Codex animation](screenshots/amoled_18/codex-splash.png) |
+
+| Codex usage | Cursor animation | Cursor usage |
+| :---------: | :--------------: | :----------: |
+| ![Codex usage](screenshots/amoled_18/codex-usage.png) | ![Cursor animation](screenshots/amoled_18/cursor-splash.png) | ![Cursor usage](screenshots/amoled_18/cursor-usage.png) |
+
 > Note: in addition to the original project's licensing warning below, Tokenmeter renders the Cursor and OpenAI logo marks on-device. Those are third-party trademarks — fine for a personal desk gadget, but don't redistribute hardware/binaries with them without checking the brand guidelines.
 
 The original Clawdmeter README follows — its flashing, pairing, and daemon instructions all still apply (use the `waveshare_amoled_18` env and the multi-service daemon in `daemon/`).

@@ -381,17 +381,19 @@ static void build_selector_screen(lv_obj_t* scr) {
     lv_label_set_text(title, "Tokenmeter");
     lv_obj_set_style_text_font(title, &font_tiempos_34, 0);
     lv_obj_set_style_text_color(title, COL_TEXT, 0);
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 16);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, L.title_y);
 
     // Three icon-only zones: full-width hit areas, animated pixel logos centered.
-    const int zone_h = 118;
-    const int zone_gap = 4;
-    const int y0 = 70;
+    const int top = L.title_y + lv_font_get_line_height(&font_tiempos_34) + 12;
+    const int bottom = L.margin;
+    const int available_h = L.scr_h - top - bottom;
+    const int zone_h = available_h / 3;
+    const int y0 = top + (available_h - zone_h * 3) / 2;
     const screen_t targets[3] = { SCREEN_SPLASH, SCREEN_SPLASH_CODEX, SCREEN_SPLASH_CURSOR };
 
     for (int i = 0; i < 3; i++) {
         lv_obj_t* zone = make_selector_zone(selector.container,
-                                            y0 + i * (zone_h + zone_gap), zone_h,
+                                            y0 + i * zone_h, zone_h,
                                             targets[i]);
         selector.tiles[i] = zone;
 
