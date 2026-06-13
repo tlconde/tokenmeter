@@ -1,7 +1,7 @@
 #include "io_expander.h"
 #include "board.h"
+#include "board_i2c.h"
 #include <Arduino.h>
-#include <Wire.h>
 
 // XCA9554/PCA9554 register map
 #define IOX_REG_INPUT    0x00
@@ -18,18 +18,18 @@
 static uint8_t output_state = 0x00;
 
 static bool write_reg(uint8_t reg, uint8_t val) {
-    Wire.beginTransmission(XCA9554_ADDR);
-    Wire.write(reg);
-    Wire.write(val);
-    return Wire.endTransmission() == 0;
+    BoardWire.beginTransmission(XCA9554_ADDR);
+    BoardWire.write(reg);
+    BoardWire.write(val);
+    return BoardWire.endTransmission() == 0;
 }
 
 static bool read_reg(uint8_t reg, uint8_t& val) {
-    Wire.beginTransmission(XCA9554_ADDR);
-    Wire.write(reg);
-    if (Wire.endTransmission(false) != 0) return false;
-    if (Wire.requestFrom(XCA9554_ADDR, (uint8_t)1) != 1) return false;
-    val = Wire.read();
+    BoardWire.beginTransmission(XCA9554_ADDR);
+    BoardWire.write(reg);
+    if (BoardWire.endTransmission(false) != 0) return false;
+    if (BoardWire.requestFrom(XCA9554_ADDR, (uint8_t)1) != 1) return false;
+    val = BoardWire.read();
     return true;
 }
 

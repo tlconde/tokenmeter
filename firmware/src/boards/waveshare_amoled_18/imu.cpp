@@ -1,7 +1,7 @@
 #include "../../hal/imu_hal.h"
 #include "board.h"
+#include "board_i2c.h"
 #include <Arduino.h>
-#include <Wire.h>
 #include <SensorQMI8658.hpp>
 
 // AMOLED-1.8 ships with QMI8658 populated, but the kit's enclosure mounts
@@ -11,7 +11,7 @@
 static SensorQMI8658 imu;
 
 void imu_hal_init(void) {
-    if (!imu.begin(Wire, QMI8658_L_SLAVE_ADDRESS, IIC_SDA, IIC_SCL)) {
+    if (!imu.begin(BoardWire, QMI8658_L_SLAVE_ADDRESS, IIC_SDA, IIC_SCL)) {
         Serial.println("QMI8658 init failed");
         return;
     }

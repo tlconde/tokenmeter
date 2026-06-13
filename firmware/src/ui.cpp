@@ -1,6 +1,7 @@
 #include "ui.h"
 #include "splash.h"
 #include "logo_anim.h"
+#include <Arduino.h>
 #include <lvgl.h>
 #include <stdint.h>
 #include <string.h>

@@ -7,6 +7,7 @@
 #include "data.h"
 #include "ui.h"
 #include "ble.h"
+#include "voice.h"
 #include "splash.h"
 #include "usage_rate.h"
 #include "idle.h"
@@ -253,7 +254,6 @@ void setup() {
 
     power_hal_init();
     imu_hal_init();
-    touch_hal_init();
 
     // ---- LVGL ----
     const int W = board_caps().width;
@@ -280,6 +280,10 @@ void setup() {
     input_hal_init();
 
     ui_init();
+    voice_init();
+    // Audio setup touches the ESP32 I2C peripheral. Initialize touch last so
+    // its Wire handle and controller device remain valid at runtime.
+    touch_hal_init();
     ui_update_ble_status(ble_get_state(), ble_get_device_name(), ble_get_mac_address());
     ui_update_battery(power_hal_battery_pct(), power_hal_is_charging());
     ui_show_screen(SCREEN_SELECTOR);
@@ -341,6 +345,7 @@ void loop() {
     lv_timer_handler();
     ui_tick_anim();
     ble_tick();
+    voice_tick();
     power_hal_tick();
     imu_hal_tick();
     splash_tick();
