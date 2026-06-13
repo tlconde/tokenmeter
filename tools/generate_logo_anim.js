@@ -26,6 +26,7 @@ const opt = (k, def) => {
 
 const OUT_DIR = path.resolve(opt('--out-dir', path.join(__dirname, 'logo_anim_data')));
 const PREVIEW_DIR = path.resolve(opt('--preview-dir', '/tmp/clawdmeter_logo_preview'));
+const ONLY_SERVICE = opt('--service', null);
 
 const PALETTE = ['transparent', '#ffffff', '#888888'];
 
@@ -41,12 +42,14 @@ const SOURCES = {
     quantize: 'mono',
   },
   cursor: {
-    name: 'cursor idle',
+    filename: 'cursor_splash.json',
+    name: 'cursor splash',
     category: 'Logo',
+    localPath: path.join(__dirname, '..', 'assets', 'logo_sources', 'cursor.svg'),
     urls: [
       'https://cursor.com/favicon.svg',
     ],
-    motion: 'bob_tilt',
+    motion: 'consume_grow',
     quantize: 'bright_only',
   },
 };
@@ -74,6 +77,11 @@ function fetchUrl(url) {
 
 async function loadSvg(serviceKey) {
   const spec = SOURCES[serviceKey];
+  if (spec.localPath && fs.existsSync(spec.localPath)) {
+    const buf = fs.readFileSync(spec.localPath);
+    console.log(`  ${serviceKey}: loaded ${spec.localPath} (${buf.length} bytes)`);
+    return buf;
+  }
   let lastErr = null;
   for (const url of spec.urls) {
     try {
@@ -160,6 +168,56 @@ function sampleTransformed(png, frameIdx, total, motion, quantize) {
   return grid;
 }
 
+function emptyGrid() {
+  return Array.from({ length: GRID }, () => Array(GRID).fill(0));
+}
+
+function stampMask(target, source, cx, cy, scale, color) {
+  for (let y = 0; y < GRID; y++) {
+    for (let x = 0; x < GRID; x++) {
+      const sx = Math.round((x - cx) / scale + GRID / 2);
+      const sy = Math.round((y - cy) / scale + GRID / 2);
+      if (sx < 0 || sy < 0 || sx >= GRID || sy >= GRID) continue;
+      if (source[sy][sx] !== 0) target[y][x] = color;
+    }
+  }
+}
+
+function cursorParticle(grid, x, y, color) {
+  const points = [
+    [1, 0], [2, 0],
+    [0, 1], [3, 1],
+    [0, 2], [2, 2],
+    [1, 3], [2, 3],
+  ];
+  for (const [dx, dy] of points) {
+    const px = x + dx;
+    const py = y + dy;
+    if (px >= 0 && py >= 0 && px < GRID && py < GRID) grid[py][px] = color;
+  }
+}
+
+function consumingCursorFrame(base, frameIdx) {
+  const grid = emptyGrid();
+  const progress = Math.min(frameIdx / 8, 1);
+  const eaterX = 4.0 + progress * 6.0;
+  const eaterScale = 0.42 + progress * 0.58;
+
+  const snacks = [
+    { eatenAt: 0.24, x: 7, y: 3 },
+    { eatenAt: 0.50, x: 12, y: 13 },
+    { eatenAt: 0.82, x: 16, y: 5 },
+  ];
+  for (const snack of snacks) {
+    if (progress < snack.eatenAt) cursorParticle(grid, snack.x, snack.y, 2);
+  }
+
+  // The Cursor mark itself is the eater: it advances through the smaller
+  // marks and grows after every bite until it reaches the original max size.
+  stampMask(grid, base, eaterX, 10, eaterScale, 1);
+  return grid;
+}
+
 function gridToPreviewPng(grid, cellSize = 16) {
   const w = GRID * cellSize;
   const h = GRID * cellSize;
@@ -214,10 +272,13 @@ async function generateService(serviceKey) {
   const spec = SOURCES[serviceKey];
   const svg = await loadSvg(serviceKey);
   const base = renderSvg(svg, RENDER_SIZE);
+  const baseGrid = sampleTransformed(base, 0, FRAME_COUNT, 'still', spec.quantize || 'mono');
 
   const frames = [];
   for (let i = 0; i < FRAME_COUNT; i++) {
-    const grid = sampleTransformed(base, i, FRAME_COUNT, spec.motion, spec.quantize || 'mono');
+    const grid = spec.motion === 'consume_grow'
+      ? consumingCursorFrame(baseGrid, i)
+      : sampleTransformed(base, i, FRAME_COUNT, spec.motion, spec.quantize || 'mono');
     frames.push({ hold: HOLD_MS, grid });
     const preview = gridToPreviewPng(grid, 20);
     const framePath = path.join(PREVIEW_DIR, `${serviceKey}_frame_${String(i).padStart(2, '0')}.png`);
@@ -228,7 +289,7 @@ async function generateService(serviceKey) {
   fs.writeFileSync(path.join(PREVIEW_DIR, `${serviceKey}_composite.png`), PNG.sync.write(composite));
 
   const data = {
-    filename: `${serviceKey}_idle.json`,
+    filename: spec.filename || `${serviceKey}_idle.json`,
     name: spec.name,
     category: spec.category,
     description: `Idle logo animation for ${serviceKey}`,
@@ -250,7 +311,9 @@ async function main() {
   console.log(`Preview PNGs -> ${PREVIEW_DIR}`);
   console.log(`JSON data    -> ${OUT_DIR}`);
 
-  for (const key of Object.keys(SOURCES)) {
+  const keys = ONLY_SERVICE ? [ONLY_SERVICE] : Object.keys(SOURCES);
+  for (const key of keys) {
+    if (!SOURCES[key]) throw new Error(`unknown service: ${key}`);
     console.log(`Generating ${key}...`);
     await generateService(key);
   }

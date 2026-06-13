@@ -145,3 +145,22 @@ Bash daemon (`daemon/claude-usage-daemon.sh`) reads OAuth token, polls Anthropic
 - `...0002` RX — daemon writes JSON usage payload here.
 - `...0003` TX — firmware notifies ack/nack (daemon doesn't subscribe).
 - `...0004` REQ — firmware fires `0x01` notify in `onSubscribe` if `has_received_data` is false. Daemon subscribes via `setsid bash -c "stdbuf -oL dbus-monitor … | awk …"`; awk drops a flag file the inner loop picks up. See the `feedback_dbus_monitor_pipe` memory for the three subtle gotchas (pipe buffering, busctl-exits race, `wait` blocking on pipeline jobs).
+
+## Voice channel (service `4c41555a-...0010`)
+
+Counterpart of the Mac voice-approver daemon (`voice-approver/daemon/voice_approver/device.py`
+is the protocol source of truth). Firmware side: `src/voice.{h,cpp}` (shared — ADPCM codec,
+GATT service, approval overlay, audio task) + `hal/audio_hal.h` with per-board impls
+(`boards/waveshare_amoled_18/audio.cpp` is the only real one: ES8311 @ I2C 0x18, I2S
+BCLK=9/MCLK=16/WS=45/DOUT=8/DIN=10, PA enable GPIO46 + EXIO2; other boards stub).
+
+- `...0011` AUDIO_OUT — host writes `[seq:u8][flags:u8][adpcm]` (write-nr, flags&1 = last chunk). seq 0 resets the stream.
+- `...0012` CTRL — host writes JSON: `ask` (show overlay, ≤200 chars), `rec` (`max_s`), `stop`, `idle` (hide overlay).
+- `...0013` AUDIO_IN — firmware notifies mic audio, same framing as AUDIO_OUT.
+- `...0014` EVT — firmware notifies JSON: `play_done` / `rec_done` / `touch` (`d` = `allow`|`deny`).
+
+Audio both ways is IMA ADPCM, 16 kHz mono, predictor/index carried across the whole
+stream (no block headers), first sample in the LOW nibble. Boards without audio still
+serve the overlay; they ack `play_done`/`rec_done` immediately so the daemon never stalls.
+All NimBLE notifies and LVGL work happen on the main loop (`voice_tick`); the audio
+task only touches I2S and FreeRTOS queues.

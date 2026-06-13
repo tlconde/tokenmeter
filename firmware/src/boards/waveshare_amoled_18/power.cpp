@@ -1,8 +1,8 @@
 #include "../../hal/power_hal.h"
 #include "board.h"
+#include "board_i2c.h"
 #include "io_expander.h"
 #include <Arduino.h>
-#include <Wire.h>
 #include <XPowersLib.h>
 
 // PWR button comes from XCA9554 EXIO4 (active HIGH). The PMU still
@@ -36,7 +36,7 @@ static uint32_t last_charging_ms  = 0;
 static uint32_t last_pwr_ms       = 0;
 
 void power_hal_init(void) {
-    if (!pmu.begin(Wire, AXP2101_ADDR, IIC_SDA, IIC_SCL)) {
+    if (!pmu.begin(BoardWire, AXP2101_ADDR, IIC_SDA, IIC_SCL)) {
         Serial.println("AXP2101 init failed");
         return;
     }

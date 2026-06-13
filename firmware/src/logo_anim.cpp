@@ -23,17 +23,26 @@ static bool active = false;
 static uint16_t cur_frame = 0;
 static uint32_t frame_started_ms = 0;
 
-static int anim_index_for(logo_screen_t which) {
-    const char* want = (which == LOGO_SCREEN_CODEX) ? "codex idle" : "cursor idle";
+static int anim_index_named(const char* want) {
     for (int i = 0; i < LOGO_ANIM_COUNT; i++) {
         if (logo_anims[i].name && strcmp(logo_anims[i].name, want) == 0) return i;
     }
+    return -1;
+}
+
+static int idle_anim_index_for(logo_screen_t which) {
+    const char* want = (which == LOGO_SCREEN_CODEX) ? "codex idle" : "cursor idle";
+    int idx = anim_index_named(want);
+    if (idx >= 0) return idx;
     return (which == LOGO_SCREEN_CODEX) ? 0 : 1;
 }
 
 static const logo_anim_def_t* current_anim(void) {
     if (LOGO_ANIM_COUNT == 0) return NULL;
-    int idx = anim_index_for(active_screen);
+    int idx = active_screen == LOGO_SCREEN_CURSOR
+        ? anim_index_named("cursor splash")
+        : idle_anim_index_for(active_screen);
+    if (idx < 0) idx = idle_anim_index_for(active_screen);
     if (idx < 0 || idx >= LOGO_ANIM_COUNT) idx = 0;
     return &logo_anims[idx];
 }
@@ -170,7 +179,7 @@ static void logo_mini_render(LogoMini* m) {
 
 lv_obj_t* logo_mini_create(lv_obj_t* parent, logo_screen_t which, int px) {
     if (logo_mini_count >= LOGO_MINI_MAX) return NULL;
-    int idx = anim_index_for(which);
+    int idx = idle_anim_index_for(which);
     if (idx < 0 || idx >= LOGO_ANIM_COUNT) return NULL;
     const logo_anim_def_t* anim = &logo_anims[idx];
     if (!anim->frames || anim->frame_count == 0) return NULL;
@@ -209,7 +218,7 @@ void logo_mini_tick(void) {
 
 bool logo_build_image_dsc(logo_screen_t which, int px, lv_image_dsc_t* dsc, uint8_t* buf) {
     if (!dsc || !buf || px < GRID) return false;
-    int idx = anim_index_for(which);
+    int idx = idle_anim_index_for(which);
     if (idx < 0 || idx >= LOGO_ANIM_COUNT) return false;
     const logo_anim_def_t* a = &logo_anims[idx];
     if (!a->frames || a->frame_count == 0) return false;

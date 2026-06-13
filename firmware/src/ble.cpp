@@ -1,4 +1,5 @@
 #include "ble.h"
+#include "voice.h"
 #include <Arduino.h>
 #include <NimBLEDevice.h>
 #include <NimBLEHIDDevice.h>
@@ -202,6 +203,10 @@ void ble_init(void) {
     req_char->setCallbacks(&reqCb);
 
     svc->start();
+
+    // --- Voice channel service (speaker/mic/approval overlay) ---
+    voice_register_ble(server);
+
     server->start();
     start_advertising();
 
