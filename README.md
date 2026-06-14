@@ -34,8 +34,7 @@ The original Clawdmeter README follows — its flashing, pairing, and daemon ins
 A small ESP32 dashboard I made for my desk to keep an eye on Claude Code usage.
 
 It runs on a [Waveshare ESP32-S3-Touch-AMOLED-2.16](https://www.waveshare.com/esp32-s3-touch-amoled-2.16.htm?&aff_id=149786) as well as a few other alternative boards and pairs over Bluetooth, the splash screen plays pixel-art Clawd animations that get
-busier when your usage rate climbs. The two side buttons send Space and
-Shift+Tab over BLE HID for Claude Code's voice mode and mode-toggle shortcuts.
+busier when your usage rate climbs. The side buttons send Space (and Shift+Tab on the 2.16) over BLE HID for Claude Code's voice mode and mode-toggle shortcuts.
 
 |              Usage meter              |              Clawd animation screen              |
 | :-----------------------------------: | :----------------------------------------------: |
@@ -222,19 +221,28 @@ reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v Clawdmeter /f
 4. The daemon connects to the ESP32 over BLE and writes a JSON payload to the GATT RX characteristic.
 5. The firmware parses it and updates the LVGL dashboard.
 6. The firmware also tracks the rate of change of session % over a 5-minute window and picks splash animations from the matching mood group.
-7. The two side buttons are independent of all of this — they send Space and Shift+Tab as BLE HID keyboard input to the paired host directly.
+7. The side buttons are independent of all of this — they send Space and (on boards with a third button) Shift+Tab as BLE HID keyboard input to the paired host directly.
 
 ## Physical buttons
 
-The board has three side buttons. Left and right send HID keys; the middle (PWR) button cycles splash animations and, held for 3 seconds, triggers pairing mode.
+Button layout depends on the board:
+
+**AMOLED-2.16 (S3 and C6)** — three side buttons:
 
 | Button           | GPIO         | Function                                                       |
 | ---------------- | ------------ | -------------------------------------------------------------- |
 | **Left**         | GPIO 0       | Hold to send Space (Claude Code voice-mode push-to-talk)       |
-| **Middle** (PWR) | AXP2101 PKEY | On splash: cycle animations. Hold 3s + release: pairing mode |
+| **Middle** (PWR) | AXP2101 PKEY | On splash: cycle animations. Hold 3s + release: pairing mode   |
 | **Right**        | GPIO 18      | Press to send Shift+Tab (Claude Code mode toggle)              |
 
-Space and Shift+Tab go out as standard BLE HID keyboard reports, so they trigger in whatever window has focus on the paired host — not just Claude Code.
+**AMOLED-1.8** — two buttons, both on the right edge of the device. No third (GPIO 18) button on this board:
+
+| Button             | Source        | Function                                                                                              |
+| ------------------ | ------------- | ----------------------------------------------------------------------------------------------------- |
+| **Top right** (BOOT) | GPIO 0      | Hold to send Space (Claude Code voice-mode push-to-talk)                                              |
+| **Bottom right** (PWR) | XCA9554 EXIO4 | On splash: cycle animations. On usage screens: cycle screen brightness. Hold 3s + release: pairing mode |
+
+Space (and Shift+Tab where present) go out as standard BLE HID keyboard reports, so they trigger in whatever window has focus on the paired host — not just Claude Code.
 
 ## BLE protocol
 
