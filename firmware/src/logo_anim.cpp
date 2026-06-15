@@ -33,10 +33,10 @@ static uint32_t last_pick_ms = 0;
 #define CODEX_GROUP_MAX 2
 
 static const char* CODEX_GROUP_NAMES[CODEX_GROUP_COUNT][CODEX_GROUP_MAX] = {
-    { "codex terminal", "codex look around" },
-    { "codex look around", "codex terminal" },
-    { "codex happy", "codex look around" },
-    { "codex happy", "codex terminal" },
+    { "codex terminal", "codex scan" },
+    { "codex scan", "codex terminal" },
+    { "codex compile", "codex orbit" },
+    { "codex orbit", "codex compile" },
 };
 static int8_t codex_group_lists[CODEX_GROUP_COUNT][CODEX_GROUP_MAX];
 static uint8_t codex_group_size[CODEX_GROUP_COUNT] = {};
@@ -249,6 +249,12 @@ bool logo_anim_next(void) {
         return idx != start;
     }
     return false;
+}
+
+bool logo_anim_keepalive(void) {
+    if (!active || active_screen != LOGO_SCREEN_CODEX) return false;
+    last_pick_ms = millis();
+    return true;
 }
 
 void logo_anim_pick_for_current_rate(void) {

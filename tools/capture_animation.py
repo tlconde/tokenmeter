@@ -47,6 +47,10 @@ def rgb565_to_rgb(raw: bytes, width: int, height: int) -> bytes:
 
 def capture_frame(port: serial.Serial) -> tuple[bytes, int, int, float]:
     started = time.monotonic()
+    port.write(b"anim keepalive\n")
+    port.flush()
+    while read_line(port, started + 5) != "ANIM_KEEPALIVE_OK":
+        pass
     port.write(b"screenshot\n")
     port.flush()
     deadline = started + 30

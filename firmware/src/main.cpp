@@ -231,6 +231,10 @@ static void check_serial_cmd() {
             else if (strcmp(cmd_buf, "anim next") == 0) {
                 Serial.println(logo_anim_next() ? "ANIM_NEXT_OK" : "ANIM_NEXT_UNAVAILABLE");
             }
+            else if (strcmp(cmd_buf, "anim keepalive") == 0) {
+                Serial.println(logo_anim_keepalive() ? "ANIM_KEEPALIVE_OK"
+                                                     : "ANIM_KEEPALIVE_UNAVAILABLE");
+            }
             cmd_pos = 0;
         } else if (cmd_pos < CMD_BUF_SIZE - 1) {
             cmd_buf[cmd_pos++] = c;

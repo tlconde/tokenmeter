@@ -13,6 +13,7 @@ void logo_anim_show(logo_screen_t which);
 // Advance within the active service's splash-only animation catalog.
 // Returns true when another animation exists for that service.
 bool logo_anim_next(void);
+bool logo_anim_keepalive(void);
 void logo_anim_pick_for_current_rate(void);
 void logo_anim_hide(void);
 void logo_anim_tick(void);
