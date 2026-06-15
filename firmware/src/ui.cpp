@@ -401,8 +401,10 @@ static void build_selector_screen(lv_obj_t* scr) {
         lv_obj_t* icon;
         if (i == 0) {
             icon = splash_mini_create(zone, "idle look around", 100);
+        } else if (i == 1) {
+            icon = logo_mini_create_named(zone, "codex terminal", 100);
         } else {
-            icon = logo_mini_create(zone, i == 1 ? LOGO_SCREEN_CODEX : LOGO_SCREEN_CURSOR, 100);
+            icon = logo_mini_create(zone, LOGO_SCREEN_CURSOR, 100);
         }
         if (icon) {
             lv_obj_align(icon, LV_ALIGN_CENTER, 0, 0);
@@ -768,6 +770,11 @@ void ui_show_screen(screen_t screen) {
     apply_header_visibility(screen);
     current_screen = screen;
     apply_battery_visibility();
+}
+
+void ui_cycle_screen(void) {
+    screen_t next = (screen_t)(((int)current_screen + 1) % (int)SCREEN_COUNT);
+    ui_show_screen(next);
 }
 
 void ui_toggle_splash(void) {

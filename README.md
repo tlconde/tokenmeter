@@ -2,9 +2,13 @@
 
 An ESP32 desk display that tracks **Claude Code, OpenAI Codex, and Cursor** usage in one little gadget.
 
+> **Unofficial personal project.** Tokenmeter is not affiliated with, endorsed
+> by, or sponsored by Anthropic, OpenAI, Anysphere/Cursor, or Waveshare. Their
+> names are used only to identify compatible services.
+
 Inspired by — and built on top of — [HermannBjorgvin/Clawdmeter](https://github.com/HermannBjorgvin/Clawdmeter), a lovely Claude Code usage meter. Tokenmeter extends it to three services:
 
-- **Three services, three screens** — boot into a selector with animated pixel logos (Clawd, the OpenAI blossom, the Cursor cube); tap a logo for that service's animation splash, tap again for its usage page in the original Clawdmeter layout.
+- **Three services, three screens** — boot into a selector with animated pixel characters (Clawd, the blue-purple Codex character, and the Cursor cube); tap one for that service's animation splash, then tap again for its usage page in the original Clawdmeter layout.
 - **Multi-source daemon (macOS)** — alongside the Claude API poller, the daemon reads Codex rate limits from local `~/.codex` session logs and Cursor usage from the Cursor dashboard API, and ships everything in one backward-compatible BLE payload (`svc` object).
 - **Per-brand UI** — each service keeps its own pixel art and styling; the whimsical spinner verbs stay Claude-only.
 - **BLE name** is `Tokenmeter`.
@@ -15,15 +19,38 @@ Inspired by — and built on top of — [HermannBjorgvin/Clawdmeter](https://git
 All images below are native 368×448 framebuffer captures from the
 Waveshare AMOLED 1.8 device.
 
-| Selector | Claude animation | Claude usage | Codex animation |
-| :------: | :--------------: | :----------: | :-------------: |
-| ![Service selector](screenshots/amoled_18/selector.png) | ![Claude animation](screenshots/amoled_18/claude-splash.png) | ![Claude usage](screenshots/amoled_18/claude-usage.png) | ![Codex animation](screenshots/amoled_18/codex-splash.png) |
+| Selector | Claude animation | Claude usage |
+| :------: | :--------------: | :----------: |
+| ![Service selector](screenshots/amoled_18/selector.png) | ![Claude animation](screenshots/amoled_18/claude-splash.png) | ![Claude usage](screenshots/amoled_18/claude-usage.png) |
 
 | Codex usage | Cursor animation | Cursor usage |
 | :---------: | :--------------: | :----------: |
 | ![Codex usage](screenshots/amoled_18/codex-usage.png) | ![Cursor animation](screenshots/amoled_18/cursor-splash.png) | ![Cursor usage](screenshots/amoled_18/cursor-usage.png) |
 
-> Note: in addition to the original project's licensing warning below, Tokenmeter renders the Cursor and OpenAI logo marks on-device. Those are third-party trademarks — fine for a personal desk gadget, but don't redistribute hardware/binaries with them without checking the brand guidelines.
+### Codex animation set
+
+The Codex splash uses one consistent blue-purple character with three original
+movement loops. It opens on **Terminal**, rotates automatically every 20
+seconds according to the current Codex usage-rate group, and can be cycled
+manually with the PWR button.
+
+| Terminal | Happy | Look around |
+| :------: | :---: | :---------: |
+| ![Codex terminal animation](screenshots/amoled_18/codex-terminal-animation.gif) | ![Codex happy animation](screenshots/amoled_18/codex-happy-animation.gif) | ![Codex look-around animation](screenshots/amoled_18/codex-look-around-animation.gif) |
+
+Native 368×448 framebuffer recordings captured directly from the device:
+
+- [Codex terminal animation](screenshots/amoled_18/codex-terminal-animation.mp4)
+- [Codex happy animation](screenshots/amoled_18/codex-happy-animation.mp4)
+- [Codex look-around animation](screenshots/amoled_18/codex-look-around-animation.mp4)
+- [Cursor animation](screenshots/amoled_18/cursor-animation.mp4)
+
+> **Third-party marks and artwork:** the screenshots and firmware display
+> Anthropic/Claude, OpenAI, and Cursor artwork. Those assets remain the
+> property of their respective owners. Their presence here does not grant a
+> license to reuse them or imply endorsement. See
+> [Rights and redistribution status](#rights-and-redistribution-status) before
+> copying, publishing builds, or selling hardware.
 
 The original Clawdmeter README follows — its flashing, pairing, and daemon instructions all still apply (use the `waveshare_amoled_18` env and the multi-service daemon in `daemon/`).
 
@@ -239,8 +266,8 @@ Button layout depends on the board:
 
 | Button             | Source        | Function                                                                                              |
 | ------------------ | ------------- | ----------------------------------------------------------------------------------------------------- |
-| **Top right** (BOOT) | GPIO 0      | Hold to send Space (Claude Code voice-mode push-to-talk)                                              |
-| **Bottom right** (PWR) | XCA9554 EXIO4 | On splash: cycle animations. On usage screens: cycle screen brightness. Hold 3s + release: pairing mode |
+| **Top right** (BOOT) | GPIO 0      | Allow a visible agent approval request; otherwise hold to send Space over BLE                          |
+| **Bottom right** (PWR) | XCA9554 EXIO4 | On Claude or Codex splash: cycle that service's animations. Otherwise: advance to the next screen. Hold 3s + release: pairing mode |
 
 Space (and Shift+Tab where present) go out as standard BLE HID keyboard reports, so they trigger in whatever window has focus on the paired host — not just Claude Code.
 
@@ -359,8 +386,54 @@ See `tools/README.md` for details.
 
 - Pixel-art Clawd animation by [@amaanbuilds](https://x.com/amaanbuilds), sourced from [claudepix.vercel.app](https://claudepix.vercel.app). Frame data and palettes scraped + converted by the tooling in `tools/`.
 - Lucide icon set ([lucide.dev](https://lucide.dev), MIT) for bluetooth and battery UI glyphs.
-- Anthropic brand fonts (Tiempos Text, Styrene B) — see licensing warning below.
+- Anthropic brand fonts (Tiempos Text, Styrene B) — see the rights status below.
 
-## Licensing gray area warning
+## Rights and redistribution status
 
-The software in this repository uses and adheres to the Anthropic brand guidelines and uses the same proprietary fonts that Anthropic has a license for but this software uses without permission as well as using assets from Anthropic such as the copyrighted Clawd mascot so even though the code in this repo is non-proprietary I will not license it myself under a copyleft license since this repo includes proprietary fonts and copyrighted assets. Please be aware of this if you fork or copy the code from this repo. **You have been warned!**
+This repository is a public record of a personal, non-commercial prototype.
+It is **not currently cleared for redistribution or sale**.
+
+- **Source code:** the upstream Clawdmeter repository does not provide a
+  software license. Under default copyright rules, publishing source code does
+  not by itself grant permission to reproduce, modify, or redistribute it.
+  Tokenmeter therefore does not describe this combined repository as open
+  source or apply a blanket license to upstream work.
+- **Fonts:** `TiemposText-400-Regular.otf` is copyrighted by Klim Type Foundry
+  and `StyreneB-Regular.otf` by Commercial Type. No redistribution license for
+  either font is included here. The generated `font_tiempos_*.c` and
+  `font_styrene_*.c` files contain converted glyph data and should also be
+  treated as restricted until permission is confirmed.
+- **Clawd artwork:** the pixel-art frames are credited to
+  [@amaanbuilds](https://x.com/amaanbuilds) and were obtained from
+  [claudepix.vercel.app](https://claudepix.vercel.app). No license authorizing
+  redistribution has been identified. Credit is important, but is not a
+  substitute for permission.
+- **Brand marks:** Claude/Clawd, OpenAI/Codex, Cursor, and their logos are
+  third-party marks. Use in this prototype is descriptive. Do not imply an
+  official partnership, use these marks as Tokenmeter branding, sell branded
+  hardware, or redistribute modified logo assets without permission and a
+  fresh review of the owners' current brand rules.
+- **Account and API access:** the daemon is an unofficial integration. It
+  reads credentials created by locally installed developer tools and includes
+  calls to service endpoints that are not documented as public APIs. Provider
+  terms may restrict automated access or credential reuse, and those endpoints
+  may change without notice. Review the current provider terms and migrate to
+  documented APIs or local-only data sources before distributing the daemon.
+- **Permissively licensed assets:** Lucide icons are available under ISC/MIT
+  terms, DejaVu Sans Mono under its bundled font terms, and Noto Sans CJK under
+  SIL OFL 1.1. Their required notices should be included in any independently
+  cleared distribution.
+
+### Sharing the prototype
+
+A factual social post showing your own prototype is different from granting
+the public permission to copy the repository or selling devices. Keep the post
+non-commercial, credit
+[HermannBjorgvin/Clawdmeter](https://github.com/HermannBjorgvin/Clawdmeter)
+and [@amaanbuilds](https://x.com/amaanbuilds), describe Tokenmeter as
+unofficial, and avoid language suggesting endorsement or partnership.
+
+Do not attach firmware binaries, font files, asset packs, or sales links until
+the restricted assets have been replaced or licensed and the software
+licensing chain has been resolved. This section documents known issues; it is
+not legal advice.

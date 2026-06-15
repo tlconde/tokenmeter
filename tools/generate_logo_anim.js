@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Generate frame-based logo animations for Codex (OpenAI) and Cursor.
+ * Generate frame-based logo animations for Codex and Cursor.
  * Rasterizes SVG marks, applies idle motion, quantizes to 20×20 palette grids,
  * writes preview PNGs for visual verification, and JSON for convert_logo_to_c.js.
  *
@@ -29,17 +29,40 @@ const PREVIEW_DIR = path.resolve(opt('--preview-dir', '/tmp/clawdmeter_logo_prev
 const ONLY_SERVICE = opt('--service', null);
 
 const PALETTE = ['transparent', '#ffffff', '#888888'];
+const CODEX_PALETTE = [
+  'transparent',
+  '#1f32d8',
+  '#536cf5',
+  '#8393ff',
+  '#b9b2ff',
+  '#ecf4ff',
+  '#8fe9ff',
+];
 
 const SOURCES = {
-  codex: {
-    name: 'codex idle',
-    category: 'Logo',
-    urls: [
-      'https://cdn.jsdelivr.net/npm/simple-icons@v11/icons/openai.svg',
-      'https://upload.wikimedia.org/wikipedia/commons/4/4d/OpenAI_Logo.svg',
-    ],
-    motion: 'bob_pulse',
-    quantize: 'mono',
+  'codex-look': {
+    filename: 'codex_look_around.json',
+    name: 'codex look around',
+    category: 'Codex',
+    procedural: 'codex_look',
+    frameCount: 16,
+    palette: CODEX_PALETTE,
+  },
+  'codex-happy': {
+    filename: 'codex_happy.json',
+    name: 'codex happy',
+    category: 'Codex',
+    procedural: 'codex_happy',
+    frameCount: 16,
+    palette: CODEX_PALETTE,
+  },
+  'codex-terminal': {
+    filename: 'codex_terminal.json',
+    name: 'codex terminal',
+    category: 'Codex',
+    procedural: 'terminal_face',
+    frameCount: 20,
+    palette: CODEX_PALETTE,
   },
   cursor: {
     filename: 'cursor_splash.json',
@@ -168,8 +191,253 @@ function sampleTransformed(png, frameIdx, total, motion, quantize) {
   return grid;
 }
 
+function samplePlaced(png, scale, shiftX, shiftY, quantize) {
+  const grid = [];
+  for (let gy = 0; gy < GRID; gy++) {
+    const row = [];
+    for (let gx = 0; gx < GRID; gx++) {
+      const lx = (gx + 0.5 - GRID / 2 - shiftX) / scale;
+      const ly = (gy + 0.5 - GRID / 2 - shiftY) / scale;
+      const u = (lx / GRID + 0.5) * png.width;
+      const v = (ly / GRID + 0.5) * png.height;
+      const x = Math.floor(u);
+      const y = Math.floor(v);
+      if (x < 0 || y < 0 || x >= png.width || y >= png.height) {
+        row.push(0);
+        continue;
+      }
+      const idx = (y * png.width + x) << 2;
+      row.push(nearestPaletteIndex(
+        png.data[idx], png.data[idx + 1], png.data[idx + 2], png.data[idx + 3],
+        quantize,
+      ));
+    }
+    grid.push(row);
+  }
+  return grid;
+}
+
+function codexFocusFrame(base, frameIdx, quantize) {
+  const poses = [
+    { x: 0, y: 0, scale: 0.70, hold: 180 },
+    { x: 0, y: 0, scale: 0.74, hold: 120 },
+    { x: 0.6, y: -0.3, scale: 0.74, hold: 120 },
+    { x: 1.0, y: -0.5, scale: 0.74, hold: 240 },
+    { x: 0.6, y: -0.3, scale: 0.74, hold: 120 },
+    { x: 0, y: 0, scale: 0.74, hold: 180 },
+    { x: -0.6, y: 0.3, scale: 0.74, hold: 120 },
+    { x: -1.0, y: 0.5, scale: 0.74, hold: 240 },
+    { x: -0.6, y: 0.3, scale: 0.74, hold: 120 },
+    { x: 0, y: -0.5, scale: 0.76, hold: 140 },
+    { x: 0, y: 0, scale: 0.74, hold: 140 },
+    { x: 0, y: 0, scale: 0.70, hold: 180 },
+  ];
+  const pose = poses[frameIdx % poses.length];
+  return {
+    grid: samplePlaced(base, pose.scale, pose.x, pose.y, quantize),
+    hold: pose.hold,
+  };
+}
+
+function codexHappyFrame(base, frameIdx, quantize) {
+  const poses = [
+    { x: 0, y: 0, scale: 0.70, hold: 180 },
+    { x: 0, y: -0.4, scale: 0.72, hold: 100 },
+    { x: 0, y: -1.0, scale: 0.76, hold: 100 },
+    { x: 0, y: -1.4, scale: 0.78, hold: 140 },
+    { x: 0, y: -0.8, scale: 0.76, hold: 100 },
+    { x: 0, y: 0.2, scale: 0.72, hold: 100 },
+    { x: 0, y: 0.7, scale: 0.68, hold: 140 },
+    { x: 0, y: 0.1, scale: 0.72, hold: 100 },
+    { x: 0, y: -0.5, scale: 0.75, hold: 100 },
+    { x: 0, y: -0.9, scale: 0.76, hold: 120 },
+    { x: 0, y: -0.3, scale: 0.73, hold: 100 },
+    { x: 0, y: 0, scale: 0.70, hold: 220 },
+  ];
+  const pose = poses[frameIdx % poses.length];
+  return {
+    grid: samplePlaced(base, pose.scale, pose.x, pose.y, quantize),
+    hold: pose.hold,
+  };
+}
+
 function emptyGrid() {
   return Array.from({ length: GRID }, () => Array(GRID).fill(0));
+}
+
+function drawLine(grid, x0, y0, x1, y1, color) {
+  const dx = Math.abs(x1 - x0);
+  const sx = x0 < x1 ? 1 : -1;
+  const dy = -Math.abs(y1 - y0);
+  const sy = y0 < y1 ? 1 : -1;
+  let error = dx + dy;
+  while (true) {
+    if (x0 >= 0 && y0 >= 0 && x0 < GRID && y0 < GRID) grid[y0][x0] = color;
+    if (x0 === x1 && y0 === y1) break;
+    const twice = 2 * error;
+    if (twice >= dy) {
+      error += dy;
+      x0 += sx;
+    }
+    if (twice <= dx) {
+      error += dx;
+      y0 += sy;
+    }
+  }
+}
+
+function codexCharacterFrame(frameIdx, motion) {
+  const grid = emptyGrid();
+  // Original Codex choreography inspired by the motion grammar common to
+  // small pixel characters: hold, anticipate, stretch, hop, squash, recover,
+  // look around, blink, and return to idle.
+  const terminalPoses = [
+    { x: 0, y: 0, sx: 0, sy: 0, face: 'prompt', hold: 220 },
+    { x: 0, y: 0, sx: 0, sy: 0, face: 'prompt', hold: 120 },
+    { x: 0, y: 0, sx: 0, sy: 0, face: 'prompt-open', hold: 90 },
+    { x: 0, y: 1, sx: 0.35, sy: -0.45, face: 'prompt', hold: 75 },
+    { x: 0, y: 1, sx: 0.55, sy: -0.75, face: 'focus', hold: 75 },
+    { x: 0, y: 0, sx: -0.25, sy: 0.55, face: 'focus', hold: 75 },
+    { x: 0, y: -1, sx: -0.15, sy: 0.35, face: 'focus', hold: 75 },
+    { x: 0, y: -2, sx: 0, sy: 0.1, face: 'prompt-open', hold: 95 },
+    { x: 0, y: -2, sx: 0.1, sy: 0, face: 'prompt-open', hold: 95 },
+    { x: 0, y: -1, sx: 0, sy: 0.15, face: 'prompt', hold: 75 },
+    { x: 0, y: 1, sx: 0.65, sy: -0.8, face: 'blink', hold: 85 },
+    { x: 0, y: 0, sx: -0.15, sy: 0.35, face: 'prompt', hold: 85 },
+    { x: 0, y: 0, sx: 0.15, sy: -0.2, face: 'prompt', hold: 110 },
+    { x: -1, y: 0, sx: 0, sy: 0, face: 'look-left', hold: 150 },
+    { x: 0, y: 0, sx: 0, sy: 0, face: 'prompt', hold: 90 },
+    { x: 1, y: 0, sx: 0, sy: 0, face: 'look-right', hold: 150 },
+    { x: 0, y: 0, sx: 0, sy: 0, face: 'prompt', hold: 100 },
+    { x: 0, y: 0, sx: 0, sy: 0, face: 'blink', hold: 90 },
+    { x: 0, y: 0, sx: 0.1, sy: 0.1, face: 'caret', hold: 140 },
+    { x: 0, y: 0, sx: 0, sy: 0, face: 'prompt', hold: 260 },
+  ];
+  const lookPoses = [
+    { x: 0, y: 0, sx: 0, sy: 0, face: 'prompt', hold: 260 },
+    { x: -1, y: 0, sx: 0.1, sy: 0, face: 'look-left', hold: 130 },
+    { x: -1, y: 0, sx: 0, sy: 0, face: 'look-left', hold: 180 },
+    { x: 0, y: 0, sx: 0, sy: 0, face: 'prompt', hold: 100 },
+    { x: 1, y: 0, sx: 0.1, sy: 0, face: 'look-right', hold: 130 },
+    { x: 1, y: 0, sx: 0, sy: 0, face: 'look-right', hold: 180 },
+    { x: 0, y: 0, sx: 0, sy: 0, face: 'prompt', hold: 120 },
+    { x: 0, y: -1, sx: -0.1, sy: 0.2, face: 'caret', hold: 150 },
+    { x: 0, y: -1, sx: 0, sy: 0.1, face: 'caret', hold: 170 },
+    { x: 0, y: 0, sx: 0.2, sy: -0.2, face: 'blink', hold: 90 },
+    { x: 0, y: 0, sx: 0, sy: 0, face: 'prompt-open', hold: 100 },
+    { x: -1, y: 0, sx: 0, sy: 0, face: 'look-left', hold: 120 },
+    { x: 1, y: 0, sx: 0, sy: 0, face: 'look-right', hold: 120 },
+    { x: 0, y: 0, sx: 0, sy: 0, face: 'blink', hold: 90 },
+    { x: 0, y: 0, sx: 0.1, sy: 0.1, face: 'prompt', hold: 120 },
+    { x: 0, y: 0, sx: 0, sy: 0, face: 'prompt', hold: 240 },
+  ];
+  const happyPoses = [
+    { x: 0, y: 0, sx: 0, sy: 0, face: 'prompt', hold: 180 },
+    { x: 0, y: 1, sx: 0.55, sy: -0.65, face: 'focus', hold: 75 },
+    { x: -1, y: 0, sx: -0.2, sy: 0.4, face: 'prompt-open', hold: 75 },
+    { x: -1, y: -2, sx: 0, sy: 0.15, face: 'prompt-open', hold: 95 },
+    { x: 0, y: -3, sx: 0.15, sy: 0, face: 'caret', hold: 95 },
+    { x: 1, y: -2, sx: 0, sy: 0.15, face: 'prompt-open', hold: 95 },
+    { x: 1, y: 0, sx: -0.2, sy: 0.4, face: 'prompt-open', hold: 75 },
+    { x: 0, y: 1, sx: 0.7, sy: -0.8, face: 'blink', hold: 85 },
+    { x: 0, y: 0, sx: -0.2, sy: 0.35, face: 'prompt', hold: 85 },
+    { x: 0, y: 0, sx: 0.15, sy: -0.15, face: 'prompt-open', hold: 100 },
+    { x: 1, y: -1, sx: 0, sy: 0.1, face: 'look-right', hold: 100 },
+    { x: -1, y: -1, sx: 0, sy: 0.1, face: 'look-left', hold: 100 },
+    { x: 0, y: 1, sx: 0.5, sy: -0.6, face: 'focus', hold: 75 },
+    { x: 0, y: -2, sx: -0.1, sy: 0.35, face: 'caret', hold: 110 },
+    { x: 0, y: 0, sx: 0.2, sy: -0.2, face: 'blink', hold: 90 },
+    { x: 0, y: 0, sx: 0, sy: 0, face: 'prompt', hold: 240 },
+  ];
+  const poses = motion === 'codex_look'
+    ? lookPoses
+    : motion === 'codex_happy'
+      ? happyPoses
+      : terminalPoses;
+  const pose = poses[frameIdx % poses.length];
+  const cx = 9.5 + pose.x;
+  const cy = 9.5 + pose.y;
+  const lobes = [];
+  const lobeRadius = 4.15;
+  const orbitX = 4.75 + pose.sx;
+  const orbitY = 4.75 + pose.sy;
+  for (let i = 0; i < 7; i++) {
+    const angle = -Math.PI / 2 + i * Math.PI * 2 / 7;
+    lobes.push({
+      x: cx + Math.cos(angle) * orbitX,
+      y: cy + Math.sin(angle) * orbitY,
+    });
+  }
+
+  // Round seven-lobed Codex flower/cloud. The overlapping circles avoid the
+  // flat visor-like band produced by the earlier polar silhouette.
+  for (let y = 0; y < GRID; y++) {
+    for (let x = 0; x < GRID; x++) {
+      const centerDx = (x - cx) / (5.8 + pose.sx * 0.45);
+      const centerDy = (y - cy) / (5.8 + pose.sy * 0.45);
+      const insideCenter = Math.hypot(centerDx, centerDy) <= 1;
+      const insideLobe = lobes.some((lobe) => Math.hypot(x - lobe.x, y - lobe.y) <= lobeRadius);
+      const inside = insideCenter || insideLobe;
+      if (!inside) continue;
+
+      const radial = Math.hypot(x - cx, y - cy) / 9;
+      const light = (x - cx) * -0.025 + (y - cy) * -0.055;
+      if (radial > 0.82) grid[y][x] = light > 0.05 ? 5 : 3;
+      else if (light > 0.22) grid[y][x] = 4;
+      else if (light < -0.28) grid[y][x] = 1;
+      else if (light < -0.06) grid[y][x] = 2;
+      else grid[y][x] = 3;
+    }
+  }
+
+  // Thin luminous rim, brightest at the upper-left light source.
+  const filled = grid.map((row) => row.map((cell) => cell !== 0));
+  for (let y = 0; y < GRID; y++) {
+    for (let x = 0; x < GRID; x++) {
+      if (!filled[y][x]) continue;
+      const exposed = y === 0 || y === GRID - 1 || x === 0 || x === GRID - 1 ||
+        !filled[y - 1][x] || !filled[y + 1][x] ||
+        !filled[y][x - 1] || !filled[y][x + 1];
+      if (exposed) {
+        grid[y][x] = x + y < cx + cy + 1 ? 5 : 3;
+      }
+    }
+  }
+
+  const faceX = Math.round(pose.x);
+  const faceY = 10 + pose.y;
+  const expression = pose.face;
+  if (expression === 'look-left') {
+    drawLine(grid, 5 + faceX, faceY - 1, 7 + faceX, faceY, 5);
+    drawLine(grid, 7 + faceX, faceY, 5 + faceX, faceY + 1, 5);
+    drawLine(grid, 10 + faceX, faceY + 1, 13 + faceX, faceY + 1, 5);
+  } else if (expression === 'look-right') {
+    drawLine(grid, 7 + faceX, faceY - 1, 9 + faceX, faceY, 5);
+    drawLine(grid, 9 + faceX, faceY, 7 + faceX, faceY + 1, 5);
+    drawLine(grid, 12 + faceX, faceY + 1, 15 + faceX, faceY + 1, 5);
+  } else if (expression === 'focus') {
+    drawLine(grid, 6 + faceX, faceY - 1, 8 + faceX, faceY, 5);
+    drawLine(grid, 8 + faceX, faceY, 6 + faceX, faceY + 1, 5);
+    drawLine(grid, 12 + faceX, faceY + 1, 14 + faceX, faceY + 1, 5);
+  } else if (expression === 'blink') {
+    drawLine(grid, 6 + faceX, faceY, 8 + faceX, faceY, 5);
+    drawLine(grid, 12 + faceX, faceY, 14 + faceX, faceY, 5);
+  } else if (expression === 'caret') {
+    drawLine(grid, 6 + faceX, faceY - 2, 6 + faceX, faceY + 2, 5);
+    drawLine(grid, 11 + faceX, faceY + 1, 13 + faceX, faceY - 1, 5);
+    drawLine(grid, 13 + faceX, faceY - 1, 15 + faceX, faceY + 1, 5);
+  } else {
+    drawLine(grid, 5 + faceX, faceY - 2, 8 + faceX, faceY, 5);
+    drawLine(grid, 8 + faceX, faceY, 5 + faceX, faceY + 2, 5);
+    if (expression !== 'prompt-open') {
+      drawLine(grid, 11 + faceX, faceY + 2, 15 + faceX, faceY + 2, 5);
+    }
+  }
+
+  return {
+    grid,
+    hold: pose.hold,
+  };
 }
 
 function stampMask(target, source, cx, cy, scale, color) {
@@ -218,15 +486,25 @@ function consumingCursorFrame(base, frameIdx) {
   return grid;
 }
 
-function gridToPreviewPng(grid, cellSize = 16) {
+function paletteToRgba(palette) {
+  return palette.map((color, index) => {
+    if (index === 0 || color === 'transparent') return [0, 0, 0, 255];
+    const hex = color.replace('#', '');
+    if (!/^[0-9a-fA-F]{6}$/.test(hex)) throw new Error(`invalid palette color: ${color}`);
+    return [
+      Number.parseInt(hex.slice(0, 2), 16),
+      Number.parseInt(hex.slice(2, 4), 16),
+      Number.parseInt(hex.slice(4, 6), 16),
+      255,
+    ];
+  });
+}
+
+function gridToPreviewPng(grid, cellSize = 16, palette = PALETTE) {
   const w = GRID * cellSize;
   const h = GRID * cellSize;
   const out = new PNG({ width: w, height: h });
-  const colors = [
-    [0, 0, 0, 255],
-    [255, 255, 255, 255],
-    [136, 136, 136, 255],
-  ];
+  const colors = paletteToRgba(palette);
   for (let gy = 0; gy < GRID; gy++) {
     for (let gx = 0; gx < GRID; gx++) {
       const c = colors[grid[gy][gx]] || colors[0];
@@ -244,14 +522,14 @@ function gridToPreviewPng(grid, cellSize = 16) {
   return out;
 }
 
-function compositePreview(frames, cellSize = 16) {
+function compositePreview(frames, cellSize = 16, palette = PALETTE) {
   const fw = GRID * cellSize;
   const fh = GRID * cellSize;
   const cols = Math.min(frames.length, 4);
   const rows = Math.ceil(frames.length / cols);
   const out = new PNG({ width: fw * cols, height: fh * rows });
   for (let i = 0; i < frames.length; i++) {
-    const png = gridToPreviewPng(frames[i].grid, cellSize);
+    const png = gridToPreviewPng(frames[i].grid, cellSize, palette);
     const col = i % cols;
     const row = Math.floor(i / cols);
     for (let y = 0; y < fh; y++) {
@@ -270,22 +548,42 @@ function compositePreview(frames, cellSize = 16) {
 
 async function generateService(serviceKey) {
   const spec = SOURCES[serviceKey];
-  const svg = await loadSvg(serviceKey);
-  const base = renderSvg(svg, RENDER_SIZE);
-  const baseGrid = sampleTransformed(base, 0, FRAME_COUNT, 'still', spec.quantize || 'mono');
+  const palette = spec.palette || PALETTE;
+  const frameCount = spec.frameCount || FRAME_COUNT;
+  let base = null;
+  let baseGrid = null;
+  if (!spec.procedural) {
+    const svg = await loadSvg(serviceKey);
+    base = renderSvg(svg, RENDER_SIZE);
+    baseGrid = sampleTransformed(base, 0, FRAME_COUNT, 'still', spec.quantize || 'mono');
+  }
 
   const frames = [];
-  for (let i = 0; i < FRAME_COUNT; i++) {
-    const grid = spec.motion === 'consume_grow'
-      ? consumingCursorFrame(baseGrid, i)
-      : sampleTransformed(base, i, FRAME_COUNT, spec.motion, spec.quantize || 'mono');
-    frames.push({ hold: HOLD_MS, grid });
-    const preview = gridToPreviewPng(grid, 20);
+  for (let i = 0; i < frameCount; i++) {
+    let frame;
+    if ((spec.procedural && spec.procedural.startsWith('codex_')) ||
+        spec.procedural === 'terminal_face') {
+      frame = codexCharacterFrame(i, spec.procedural);
+    } else if (spec.motion === 'consume_grow') {
+      frame = { hold: HOLD_MS, grid: consumingCursorFrame(baseGrid, i) };
+    } else if (spec.motion === 'focus_shift') {
+      frame = codexFocusFrame(base, i, spec.quantize || 'mono');
+    } else if (spec.motion === 'happy_bounce') {
+      frame = codexHappyFrame(base, i, spec.quantize || 'mono');
+    } else {
+      frame = {
+        hold: HOLD_MS,
+        grid: sampleTransformed(base, i, FRAME_COUNT, spec.motion, spec.quantize || 'mono'),
+      };
+    }
+    frames.push(frame);
+    const grid = frame.grid;
+    const preview = gridToPreviewPng(grid, 20, palette);
     const framePath = path.join(PREVIEW_DIR, `${serviceKey}_frame_${String(i).padStart(2, '0')}.png`);
     fs.writeFileSync(framePath, PNG.sync.write(preview));
   }
 
-  const composite = compositePreview(frames, 20);
+  const composite = compositePreview(frames, 20, palette);
   fs.writeFileSync(path.join(PREVIEW_DIR, `${serviceKey}_composite.png`), PNG.sync.write(composite));
 
   const data = {
@@ -293,7 +591,7 @@ async function generateService(serviceKey) {
     name: spec.name,
     category: spec.category,
     description: `Idle logo animation for ${serviceKey}`,
-    palette: PALETTE,
+    palette,
     frame_count: frames.length,
     frames,
   };

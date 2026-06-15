@@ -28,3 +28,7 @@ void voice_tick(void);
 
 // True while the approval overlay is visible (lets other UI yield).
 bool voice_overlay_active(void);
+
+// Resolve the visible approval request without relying on host keyboard focus.
+// Returns false when no request is active.
+bool voice_allow_pending(void);

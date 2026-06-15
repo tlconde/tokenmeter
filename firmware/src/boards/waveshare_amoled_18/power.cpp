@@ -29,6 +29,7 @@ static bool     pwr_pressed_flag  = false;
 static bool     pwr_long_flag     = false;
 static bool     pwr_released_flag = false;
 static bool     last_pwr_state    = false;   // edge detector for EXIO4
+static bool     pwr_state_valid   = false;
 static uint32_t pwr_press_started_ms = 0;
 static bool     pwr_long_fired    = false;   // long already fired for this hold
 static uint32_t last_battery_ms   = 0;
@@ -49,6 +50,15 @@ void power_hal_init(void) {
     cached_charging = pmu.isCharging();
     cached_vbus     = pmu.isVbusIn();
     cached_pct = pmu.getBatteryPercent();
+
+    bool initial_state = false;
+    if (io_expander_read(IOX_PIN_PWR_BTN, &initial_state)) {
+        last_pwr_state = initial_state;
+        pwr_state_valid = true;
+        Serial.printf("PWR input ready (state=%d)\n", initial_state ? 1 : 0);
+    } else {
+        Serial.println("PWR input initial read failed");
+    }
 }
 
 void power_hal_tick(void) {
@@ -65,7 +75,15 @@ void power_hal_tick(void) {
     }
     if (now - last_pwr_ms >= PWR_POLL_MS) {
         last_pwr_ms = now;
-        bool pwr_now = io_expander_get(IOX_PIN_PWR_BTN);
+        bool pwr_now = false;
+        if (!io_expander_read(IOX_PIN_PWR_BTN, &pwr_now)) {
+            return;  // Preserve the last valid state; never synthesize an edge.
+        }
+        if (!pwr_state_valid) {
+            last_pwr_state = pwr_now;
+            pwr_state_valid = true;
+            return;
+        }
         if (pwr_now && !last_pwr_state) {            // rising edge — hold begins
             pwr_press_started_ms = now;
             pwr_long_fired = false;

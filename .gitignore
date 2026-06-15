@@ -11,6 +11,7 @@ firmware/.vscode/
 # Node tooling deps (npm install --no-save)
 tools/node_modules/
 tools/package-lock.json
+screenshots/amoled_18/.*-frames/
 
 # Mac daemon venv
 daemon/.venv/

@@ -25,44 +25,49 @@
 
 struct Sample { uint32_t ms; float pct; };
 
-static Sample ring[RING_SIZE];
-static uint8_t count = 0;
-static uint8_t head  = 0;  // index of next write slot
+struct RateTracker {
+    Sample ring[RING_SIZE];
+    uint8_t count;
+    uint8_t head;
+};
 
-static inline uint8_t oldest_idx(void) {
-    return (head + RING_SIZE - count) % RING_SIZE;
+static RateTracker claude_tracker = {};
+static RateTracker codex_tracker = {};
+
+static inline uint8_t oldest_idx(const RateTracker& tracker) {
+    return (tracker.head + RING_SIZE - tracker.count) % RING_SIZE;
 }
 
-static void usage_rate_reset(void) {
-    count = 0;
-    head  = 0;
+static void tracker_reset(RateTracker& tracker) {
+    tracker.count = 0;
+    tracker.head = 0;
 }
 
-void usage_rate_sample(float session_pct) {
+static void tracker_sample(RateTracker& tracker, float session_pct) {
     uint32_t now = millis();
 
-    if (count > 0) {
-        uint8_t latest = (head + RING_SIZE - 1) % RING_SIZE;
+    if (tracker.count > 0) {
+        uint8_t latest = (tracker.head + RING_SIZE - 1) % RING_SIZE;
         // Session reset: pct dropped substantially. Restart tracking.
-        if (session_pct + 5.0f < ring[latest].pct) {
-            usage_rate_reset();
+        if (session_pct + 5.0f < tracker.ring[latest].pct) {
+            tracker_reset(tracker);
         }
     }
 
-    ring[head] = { now, session_pct };
-    head = (head + 1) % RING_SIZE;
-    if (count < RING_SIZE) count++;
+    tracker.ring[tracker.head] = { now, session_pct };
+    tracker.head = (tracker.head + 1) % RING_SIZE;
+    if (tracker.count < RING_SIZE) tracker.count++;
 }
 
-int usage_rate_group(void) {
-    if (count < 2) return 0;
+static int tracker_group(const RateTracker& tracker) {
+    if (tracker.count < 2) return 0;
 
-    uint8_t o = oldest_idx();
-    uint8_t l = (head + RING_SIZE - 1) % RING_SIZE;
-    uint32_t dt = ring[l].ms - ring[o].ms;
+    uint8_t o = oldest_idx(tracker);
+    uint8_t l = (tracker.head + RING_SIZE - 1) % RING_SIZE;
+    uint32_t dt = tracker.ring[l].ms - tracker.ring[o].ms;
     if (dt < MIN_WINDOW_MS) return 0;
 
-    float dp = ring[l].pct - ring[o].pct;
+    float dp = tracker.ring[l].pct - tracker.ring[o].pct;
     if (dp < 0.0f) dp = 0.0f;
     float rate = dp * 60000.0f / (float)dt;
 
@@ -70,4 +75,20 @@ int usage_rate_group(void) {
     if (rate < RATE_THRESH_ACTIVE) return 1;
     if (rate < RATE_THRESH_HEAVY)  return 2;
     return 3;
+}
+
+void usage_rate_sample(float session_pct) {
+    tracker_sample(claude_tracker, session_pct);
+}
+
+void usage_rate_sample_codex(float session_pct) {
+    tracker_sample(codex_tracker, session_pct);
+}
+
+int usage_rate_group(void) {
+    return tracker_group(claude_tracker);
+}
+
+int usage_rate_group_codex(void) {
+    return tracker_group(codex_tracker);
 }

@@ -390,6 +390,12 @@ bool voice_overlay_active(void) {
     return ov_panel && !lv_obj_has_flag(ov_panel, LV_OBJ_FLAG_HIDDEN);
 }
 
+bool voice_allow_pending(void) {
+    if (!voice_overlay_active()) return false;
+    touch_pick = 1;
+    return true;
+}
+
 // ------------------------------------------------------------------- init
 
 void voice_init(void) {
