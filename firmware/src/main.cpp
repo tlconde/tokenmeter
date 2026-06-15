@@ -9,6 +9,7 @@
 #include "ble.h"
 #include "voice.h"
 #include "splash.h"
+#include "logo_anim.h"
 #include "usage_rate.h"
 #include "idle.h"
 #include "idle_cfg.h"
@@ -227,6 +228,9 @@ static void check_serial_cmd() {
             cmd_buf[cmd_pos] = '\0';
             if (strcmp(cmd_buf, "screenshot") == 0) send_screenshot();
             else if (strncmp(cmd_buf, "screen ", 7) == 0) select_screen(cmd_buf + 7);
+            else if (strcmp(cmd_buf, "anim next") == 0) {
+                Serial.println(logo_anim_next() ? "ANIM_NEXT_OK" : "ANIM_NEXT_UNAVAILABLE");
+            }
             cmd_pos = 0;
         } else if (cmd_pos < CMD_BUF_SIZE - 1) {
             cmd_buf[cmd_pos++] = c;
@@ -355,9 +359,9 @@ void loop() {
     if (!idle_is_asleep()) display_hal_tick();
 
     // ---- Physical buttons ----
-    //   PRIMARY   → HID Space  (Claude Code voice-mode PTT)
+    //   PRIMARY   → approve a visible agent request; otherwise HID Space
     //   SECONDARY → HID Shift+Tab  (mode toggle; only if the board has one)
-    //   PWR       → on splash: cycle animations; on usage: cycle brightness;
+    //   PWR       → on Claude splash: cycle animations; otherwise: next screen;
     //               hold ~3s + release: pairing mode
     // First press from sleep is consumed as a wake-only event by
     // idle_consume_wake_press(); the normal action fires from the second
@@ -366,14 +370,28 @@ void loop() {
     {
         static bool primary_was = false;
         static bool primary_wake_swallowed = false;
+        static bool primary_sent_hid = false;
         bool primary_now = input_hal_is_held(INPUT_BTN_PRIMARY);
         if (primary_now != primary_was) {
             if (primary_now) {
                 if (idle_consume_wake_press()) primary_wake_swallowed = true;
-                else                            ble_keyboard_press(0x2C, 0);  // HID Space, no mods
+                else if (voice_allow_pending()) {
+                    Serial.println("Button BOOT: allow pending request");
+                    primary_sent_hid = false;
+                }
+                else {
+                    Serial.println("Button BOOT: down");
+                    ble_keyboard_press(0x2C, 0);  // HID Space, no mods
+                    primary_sent_hid = true;
+                }
             } else {
-                if (primary_wake_swallowed) primary_wake_swallowed = false;
-                else                        ble_keyboard_release();
+                if (primary_wake_swallowed) {
+                    primary_wake_swallowed = false;
+                } else if (primary_sent_hid) {
+                    Serial.println("Button BOOT: up");
+                    ble_keyboard_release();
+                    primary_sent_hid = false;
+                }
             }
             primary_was = primary_now;
         }
@@ -396,10 +414,16 @@ void loop() {
 
         if (power_hal_pwr_pressed()) {
             if (!idle_consume_wake_press()) {
-                // On splash: cycle animations. On the usage view: cycle
-                // screen brightness (single non-splash view, no more screens).
-                if (ui_get_current_screen() == SCREEN_SPLASH) splash_next();
-                else                                          brightness_cycle();
+                if (ui_get_current_screen() == SCREEN_SPLASH) {
+                    Serial.println("Button PWR: next Clawd animation");
+                    splash_next();
+                } else if (ui_get_current_screen() == SCREEN_SPLASH_CODEX) {
+                    Serial.println("Button PWR: next Codex animation");
+                    logo_anim_next();
+                } else {
+                    Serial.println("Button PWR: next screen");
+                    ui_cycle_screen();
+                }
             }
         }
 
@@ -433,6 +457,19 @@ void loop() {
                 Serial.printf("usage rate: group %d -> %d (s=%.2f%%)\n",
                     g_before, g_after, usage.session_pct);
                 if (splash_is_active()) splash_pick_for_current_rate();
+            }
+            if (usage.has_svc && usage.cx.ok) {
+                int cx_before = usage_rate_group_codex();
+                usage_rate_sample_codex(usage.cx.session_pct);
+                int cx_after = usage_rate_group_codex();
+                if (cx_after != cx_before) {
+                    Serial.printf("Codex usage rate: group %d -> %d (s=%.2f%%)\n",
+                        cx_before, cx_after, usage.cx.session_pct);
+                    if (logo_anim_is_active() &&
+                        ui_get_current_screen() == SCREEN_SPLASH_CODEX) {
+                        logo_anim_pick_for_current_rate();
+                    }
+                }
             }
             ui_update(&usage);
             ble_send_ack();

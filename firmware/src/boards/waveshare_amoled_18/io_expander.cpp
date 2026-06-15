@@ -57,9 +57,15 @@ void io_expander_set(uint8_t pin, bool high) {
     write_reg(IOX_REG_OUTPUT, output_state);
 }
 
-bool io_expander_get(uint8_t pin) {
-    if (pin > 7) return false;
+bool io_expander_read(uint8_t pin, bool* high) {
+    if (pin > 7 || !high) return false;
     uint8_t v = 0;
     if (!read_reg(IOX_REG_INPUT, v)) return false;
-    return (v & (1u << pin)) != 0;
+    *high = (v & (1u << pin)) != 0;
+    return true;
+}
+
+bool io_expander_get(uint8_t pin) {
+    bool high = false;
+    return io_expander_read(pin, &high) && high;
 }

@@ -1,6 +1,7 @@
 #include "logo_anim.h"
 #include "logo_animations.h"
 #include "theme.h"
+#include "usage_rate.h"
 #include "hal/board_caps.h"
 #include <Arduino.h>
 #include <string.h>
@@ -16,12 +17,30 @@ static int  canvas_h = GRID * 24;
 static lv_obj_t*  container = NULL;
 static lv_obj_t*  canvas = NULL;
 static uint16_t*  canvas_buf = NULL;
-static uint16_t*  row_buf = NULL;
+static uint8_t    rendered_cells[GRID * GRID] = {};
+static const uint16_t* rendered_palette = NULL;
+static bool       rendered_valid = false;
 
 static logo_screen_t active_screen = LOGO_SCREEN_CODEX;
 static bool active = false;
+static int active_anim_index = -1;
 static uint16_t cur_frame = 0;
 static uint32_t frame_started_ms = 0;
+static uint32_t last_pick_ms = 0;
+
+#define CODEX_ROTATE_INTERVAL_MS 20000
+#define CODEX_GROUP_COUNT 4
+#define CODEX_GROUP_MAX 2
+
+static const char* CODEX_GROUP_NAMES[CODEX_GROUP_COUNT][CODEX_GROUP_MAX] = {
+    { "codex terminal", "codex look around" },
+    { "codex look around", "codex terminal" },
+    { "codex happy", "codex look around" },
+    { "codex happy", "codex terminal" },
+};
+static int8_t codex_group_lists[CODEX_GROUP_COUNT][CODEX_GROUP_MAX];
+static uint8_t codex_group_size[CODEX_GROUP_COUNT] = {};
+static uint8_t codex_group_rotation[CODEX_GROUP_COUNT] = {};
 
 static int anim_index_named(const char* want) {
     for (int i = 0; i < LOGO_ANIM_COUNT; i++) {
@@ -31,7 +50,8 @@ static int anim_index_named(const char* want) {
 }
 
 static int idle_anim_index_for(logo_screen_t which) {
-    const char* want = (which == LOGO_SCREEN_CODEX) ? "codex idle" : "cursor idle";
+    const char* want =
+        (which == LOGO_SCREEN_CODEX) ? "codex terminal" : "cursor idle";
     int idx = anim_index_named(want);
     if (idx >= 0) return idx;
     return (which == LOGO_SCREEN_CODEX) ? 0 : 1;
@@ -39,28 +59,85 @@ static int idle_anim_index_for(logo_screen_t which) {
 
 static const logo_anim_def_t* current_anim(void) {
     if (LOGO_ANIM_COUNT == 0) return NULL;
-    int idx = active_screen == LOGO_SCREEN_CURSOR
-        ? anim_index_named("cursor splash")
-        : idle_anim_index_for(active_screen);
+    int idx = active_anim_index;
+    if (idx < 0) {
+        idx = active_screen == LOGO_SCREEN_CURSOR
+            ? anim_index_named("cursor splash")
+            : idle_anim_index_for(active_screen);
+    }
     if (idx < 0) idx = idle_anim_index_for(active_screen);
     if (idx < 0 || idx >= LOGO_ANIM_COUNT) idx = 0;
     return &logo_anims[idx];
 }
 
-static void render_frame(const uint8_t* cells, const uint16_t* palette) {
-    if (!row_buf || !canvas_buf) return;
-    for (int gy = 0; gy < GRID; gy++) {
-        for (int gx = 0; gx < GRID; gx++) {
-            uint8_t code = cells[gy * GRID + gx];
-            uint16_t color = (palette && code < LOGO_PALETTE_SIZE) ? palette[code] : COL_EMPTY;
-            uint16_t* p = &row_buf[gx * cell];
-            for (int i = 0; i < cell; i++) p[i] = color;
-        }
-        for (int dy = 0; dy < cell; dy++) {
-            memcpy(&canvas_buf[(gy * cell + dy) * canvas_w], row_buf, canvas_w * 2);
+static bool is_codex_splash_anim(int idx) {
+    if (idx < 0 || idx >= LOGO_ANIM_COUNT) return false;
+    const char* name = logo_anims[idx].name;
+    return name && strncmp(name, "codex ", 6) == 0;
+}
+
+static void resolve_codex_groups(void) {
+    for (int group = 0; group < CODEX_GROUP_COUNT; group++) {
+        codex_group_size[group] = 0;
+        for (int slot = 0; slot < CODEX_GROUP_MAX; slot++) {
+            int idx = anim_index_named(CODEX_GROUP_NAMES[group][slot]);
+            codex_group_lists[group][slot] = idx;
+            if (idx >= 0) codex_group_size[group]++;
         }
     }
-    if (canvas) lv_obj_invalidate(canvas);
+}
+
+static void render_frame(const uint8_t* cells, const uint16_t* palette) {
+    if (!cells || !canvas_buf || !canvas) return;
+
+    const bool full_redraw = !rendered_valid || palette != rendered_palette;
+    int min_gx = GRID;
+    int min_gy = GRID;
+    int max_gx = -1;
+    int max_gy = -1;
+
+    for (int gy = 0; gy < GRID; gy++) {
+        for (int gx = 0; gx < GRID; gx++) {
+            const int index = gy * GRID + gx;
+            const uint8_t code = cells[index];
+            if (!full_redraw && rendered_cells[index] == code) continue;
+
+            const uint16_t color =
+                (palette && code < LOGO_PALETTE_SIZE) ? palette[code] : COL_EMPTY;
+            for (int dy = 0; dy < cell; dy++) {
+                uint16_t* dst =
+                    &canvas_buf[(gy * cell + dy) * canvas_w + gx * cell];
+                for (int dx = 0; dx < cell; dx++) dst[dx] = color;
+            }
+            rendered_cells[index] = code;
+            if (gx < min_gx) min_gx = gx;
+            if (gx > max_gx) max_gx = gx;
+            if (gy < min_gy) min_gy = gy;
+            if (gy > max_gy) max_gy = gy;
+        }
+    }
+
+    rendered_valid = true;
+    rendered_palette = palette;
+    if (max_gx < 0) return;
+
+    lv_area_t local_area = {
+        .x1 = min_gx * cell,
+        .y1 = min_gy * cell,
+        .x2 = (max_gx + 1) * cell - 1,
+        .y2 = (max_gy + 1) * cell - 1,
+    };
+    lv_draw_buf_flush_cache(lv_canvas_get_draw_buf(canvas), &local_area);
+
+    lv_area_t canvas_coords;
+    lv_obj_get_coords(canvas, &canvas_coords);
+    lv_area_t screen_area = {
+        .x1 = canvas_coords.x1 + local_area.x1,
+        .y1 = canvas_coords.y1 + local_area.y1,
+        .x2 = canvas_coords.x1 + local_area.x2,
+        .y2 = canvas_coords.y1 + local_area.y2,
+    };
+    lv_obj_invalidate_area(canvas, &screen_area);
 }
 
 void logo_anim_init(lv_obj_t* parent) {
@@ -81,8 +158,7 @@ void logo_anim_init(lv_obj_t* parent) {
     canvas_h = GRID * cell;
 
     canvas_buf = (uint16_t*)heap_caps_malloc(canvas_w * canvas_h * 2, canvas_caps);
-    row_buf = (uint16_t*)heap_caps_malloc(canvas_w * 2, canvas_caps);
-    if (!canvas_buf || !row_buf) {
+    if (!canvas_buf) {
         Serial.println("logo_anim: failed to alloc canvas buffer");
         return;
     }
@@ -99,6 +175,7 @@ void logo_anim_init(lv_obj_t* parent) {
     canvas = lv_canvas_create(container);
     lv_canvas_set_buffer(canvas, canvas_buf, canvas_w, canvas_h, LV_COLOR_FORMAT_RGB565);
     lv_obj_center(canvas);
+    resolve_codex_groups();
 
     const logo_anim_def_t* a = current_anim();
     if (a && a->frame_count > 0) {
@@ -111,25 +188,87 @@ void logo_anim_init(lv_obj_t* parent) {
 
 void logo_anim_tick(void) {
     if (!active) return;
+    if (active_screen == LOGO_SCREEN_CODEX &&
+        millis() - last_pick_ms >= CODEX_ROTATE_INTERVAL_MS) {
+        logo_anim_pick_for_current_rate();
+    }
     const logo_anim_def_t* a = current_anim();
     if (!a || a->frame_count == 0) return;
 
-    uint16_t hold = a->holds[cur_frame];
-    if (millis() - frame_started_ms >= hold) {
+    const uint32_t now = millis();
+    bool advanced = false;
+    for (uint16_t skipped = 0; skipped < a->frame_count; skipped++) {
+        uint16_t hold = a->holds[cur_frame];
+        if (now - frame_started_ms < hold) break;
         cur_frame = (cur_frame + 1) % a->frame_count;
-        frame_started_ms = millis();
-        render_frame(a->frames[cur_frame], a->palette);
+        frame_started_ms += hold;
+        advanced = true;
     }
+    if (advanced) render_frame(a->frames[cur_frame], a->palette);
 }
 
 void logo_anim_show(logo_screen_t which) {
     active_screen = which;
+    if (which == LOGO_SCREEN_CURSOR) {
+        active_anim_index = anim_index_named("cursor splash");
+    } else {
+        active_anim_index = idle_anim_index_for(LOGO_SCREEN_CODEX);
+        int group = usage_rate_group_codex();
+        if (group < 0 || group >= CODEX_GROUP_COUNT) group = 0;
+        // The splash always opens on the canonical Codex character. The next
+        // timed pick advances to the other animation in the current group.
+        codex_group_rotation[group] = 1;
+    }
     cur_frame = 0;
     frame_started_ms = millis();
+    last_pick_ms = frame_started_ms;
     const logo_anim_def_t* a = current_anim();
     if (a && a->frame_count > 0) render_frame(a->frames[0], a->palette);
+    if (which == LOGO_SCREEN_CODEX) {
+        Serial.printf("Codex animation: %s\n", a && a->name ? a->name : "unknown");
+    }
     if (container) lv_obj_clear_flag(container, LV_OBJ_FLAG_HIDDEN);
     active = true;
+}
+
+bool logo_anim_next(void) {
+    if (!active || active_screen != LOGO_SCREEN_CODEX) return false;
+
+    int start = active_anim_index;
+    if (start < 0) start = idle_anim_index_for(LOGO_SCREEN_CODEX);
+    for (int step = 1; step <= LOGO_ANIM_COUNT; step++) {
+        int idx = (start + step) % LOGO_ANIM_COUNT;
+        if (!is_codex_splash_anim(idx)) continue;
+        active_anim_index = idx;
+        cur_frame = 0;
+        frame_started_ms = millis();
+        last_pick_ms = frame_started_ms;
+        const logo_anim_def_t* a = current_anim();
+        if (a && a->frame_count > 0) render_frame(a->frames[0], a->palette);
+        Serial.printf("Codex animation: %s\n", a && a->name ? a->name : "unknown");
+        return idx != start;
+    }
+    return false;
+}
+
+void logo_anim_pick_for_current_rate(void) {
+    int group = usage_rate_group_codex();
+    if (group < 0 || group >= CODEX_GROUP_COUNT) group = 0;
+    if (codex_group_size[group] == 0) {
+        active_anim_index = idle_anim_index_for(LOGO_SCREEN_CODEX);
+    } else {
+        uint8_t slot =
+            codex_group_rotation[group] % codex_group_size[group];
+        codex_group_rotation[group]++;
+        active_anim_index = codex_group_lists[group][slot];
+    }
+    cur_frame = 0;
+    frame_started_ms = millis();
+    last_pick_ms = frame_started_ms;
+    const logo_anim_def_t* a = current_anim();
+    if (a && a->frame_count > 0) render_frame(a->frames[0], a->palette);
+    Serial.printf("Codex rate group %d: %s\n",
+        group, a && a->name ? a->name : "unknown");
 }
 
 void logo_anim_hide(void) {
@@ -174,12 +313,15 @@ static void logo_mini_render(LogoMini* m) {
             }
         }
     }
-    if (m->canvas) lv_obj_invalidate(m->canvas);
+    if (m->canvas) {
+        lv_draw_buf_flush_cache(lv_canvas_get_draw_buf(m->canvas), NULL);
+        lv_obj_invalidate(m->canvas);
+    }
 }
 
-lv_obj_t* logo_mini_create(lv_obj_t* parent, logo_screen_t which, int px) {
+lv_obj_t* logo_mini_create_named(lv_obj_t* parent, const char* anim_name, int px) {
     if (logo_mini_count >= LOGO_MINI_MAX) return NULL;
-    int idx = idle_anim_index_for(which);
+    int idx = anim_index_named(anim_name);
     if (idx < 0 || idx >= LOGO_ANIM_COUNT) return NULL;
     const logo_anim_def_t* anim = &logo_anims[idx];
     if (!anim->frames || anim->frame_count == 0) return NULL;
@@ -203,6 +345,12 @@ lv_obj_t* logo_mini_create(lv_obj_t* parent, logo_screen_t which, int px) {
     logo_mini_render(m);
     logo_mini_count++;
     return m->canvas;
+}
+
+lv_obj_t* logo_mini_create(lv_obj_t* parent, logo_screen_t which, int px) {
+    const char* anim_name =
+        (which == LOGO_SCREEN_CODEX) ? "codex terminal" : "cursor idle";
+    return logo_mini_create_named(parent, anim_name, px);
 }
 
 void logo_mini_tick(void) {

@@ -10,6 +10,10 @@ typedef enum {
 
 void logo_anim_init(lv_obj_t* parent);
 void logo_anim_show(logo_screen_t which);
+// Advance within the active service's splash-only animation catalog.
+// Returns true when another animation exists for that service.
+bool logo_anim_next(void);
+void logo_anim_pick_for_current_rate(void);
 void logo_anim_hide(void);
 void logo_anim_tick(void);
 bool logo_anim_is_active(void);
@@ -24,4 +28,5 @@ bool logo_build_image_dsc(logo_screen_t which, int px, lv_image_dsc_t* dsc, uint
 // (position it with lv_obj_align) or NULL on failure. Drive all minis with
 // logo_mini_tick().
 lv_obj_t* logo_mini_create(lv_obj_t* parent, logo_screen_t which, int px);
+lv_obj_t* logo_mini_create_named(lv_obj_t* parent, const char* anim_name, int px);
 void logo_mini_tick(void);

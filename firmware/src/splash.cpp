@@ -86,7 +86,10 @@ static void render_frame(const uint8_t *cells, const uint16_t *palette) {
             memcpy(&canvas_buf[(gy * cell + dy) * canvas_w], row_buf, canvas_w * 2);
         }
     }
-    if (canvas) lv_obj_invalidate(canvas);
+    if (canvas) {
+        lv_draw_buf_flush_cache(lv_canvas_get_draw_buf(canvas), NULL);
+        lv_obj_invalidate(canvas);
+    }
 }
 
 // ---- Mini creatures: small animated creatures for embedding in other screens
@@ -120,7 +123,10 @@ static void mini_render(MiniCreature *m) {
             }
         }
     }
-    if (m->canvas) lv_obj_invalidate(m->canvas);
+    if (m->canvas) {
+        lv_draw_buf_flush_cache(lv_canvas_get_draw_buf(m->canvas), NULL);
+        lv_obj_invalidate(m->canvas);
+    }
 }
 
 lv_obj_t* splash_mini_create(lv_obj_t *parent, const char *anim_name, int px) {

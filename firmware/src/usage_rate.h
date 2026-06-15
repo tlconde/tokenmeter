@@ -6,7 +6,9 @@
 
 // Feed in the latest session percentage every time fresh BLE data arrives.
 void usage_rate_sample(float session_pct);
+void usage_rate_sample_codex(float session_pct);
 
 // 0 = idle, 1 = normal, 2 = active, 3 = heavy.
 // Defaults to 0 when the buffer doesn't have enough samples yet.
 int usage_rate_group(void);
+int usage_rate_group_codex(void);
