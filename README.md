@@ -8,7 +8,7 @@ An ESP32 desk display that tracks **Claude Code, OpenAI Codex, and Cursor** usag
 
 Inspired by — and built on top of — [HermannBjorgvin/Clawdmeter](https://github.com/HermannBjorgvin/Clawdmeter), a lovely Claude Code usage meter. Tokenmeter extends it to three services:
 
-- **Three services, three screens** — boot into a selector with animated pixel characters (Clawd, the blue-purple Codex character, and the Cursor cube); tap one for that service's animation splash, then tap again for its usage page in the original Clawdmeter layout.
+- **Three services, one selector** — boot into three animated, icon-only tap zones: Claude on top, Codex in the middle, and Cursor on the bottom. Each zone opens that service's animation screen; tap again for its usage page in the original Clawdmeter layout.
 - **Multi-source daemon (macOS)** — alongside the Claude API poller, the daemon reads Codex rate limits from local `~/.codex` session logs and Cursor usage from the Cursor dashboard API, and ships everything in one backward-compatible BLE payload (`svc` object).
 - **Per-brand UI** — each service keeps its own pixel art and styling; the whimsical spinner verbs stay Claude-only.
 - **BLE name** is `Tokenmeter`.
@@ -19,30 +19,30 @@ Inspired by — and built on top of — [HermannBjorgvin/Clawdmeter](https://git
 All images below are native 368×448 framebuffer captures from the
 Waveshare AMOLED 1.8 device.
 
-| Selector | Claude animation | Claude usage |
-| :------: | :--------------: | :----------: |
-| ![Service selector](screenshots/amoled_18/selector.png) | ![Claude animation](screenshots/amoled_18/claude-splash.png) | ![Claude usage](screenshots/amoled_18/claude-usage.png) |
+**Service selector**
 
-| Codex usage | Cursor animation | Cursor usage |
-| :---------: | :--------------: | :----------: |
-| ![Codex usage](screenshots/amoled_18/codex-usage.png) | ![Cursor animation](screenshots/amoled_18/cursor-splash.png) | ![Cursor usage](screenshots/amoled_18/cursor-usage.png) |
+The selector is intentionally icon-only. Its three full-width tap zones are,
+from top to bottom: **Claude**, **Codex**, and **Cursor**.
 
-### Codex animation set
+![Service selector: Claude top, Codex middle, Cursor bottom](screenshots/amoled_18/selector.png)
 
-The Codex splash uses one consistent blue-purple character with three original
-movement loops. It opens on **Terminal**, rotates automatically every 20
-seconds according to the current Codex usage-rate group, and can be cycled
-manually with the PWR button.
+| Service | Animation screen | Usage screen |
+| :-----: | :--------------: | :----------: |
+| Claude | ![Claude animation](screenshots/amoled_18/claude-splash.png) | ![Claude usage](screenshots/amoled_18/claude-usage.png) |
+| Codex | ![Codex animation](screenshots/amoled_18/codex-splash.png) | ![Codex usage](screenshots/amoled_18/codex-usage.png) |
+| Cursor | ![Cursor animation](screenshots/amoled_18/cursor-splash.png) | ![Cursor usage](screenshots/amoled_18/cursor-usage.png) |
 
-| Terminal | Happy | Look around |
-| :------: | :---: | :---------: |
-| ![Codex terminal animation](screenshots/amoled_18/codex-terminal-animation.gif) | ![Codex happy animation](screenshots/amoled_18/codex-happy-animation.gif) | ![Codex look-around animation](screenshots/amoled_18/codex-look-around-animation.gif) |
+### Codex animation
+
+The Codex splash uses one blue-purple terminal flower with a single balanced
+movement loop — drift, hop, sway, and terminal-prompt blink. The usage screen
+header reuses a smaller blink-only variant of the same mark.
+
+![Codex balanced animation](screenshots/amoled_18/codex-animation.gif)
 
 Native 368×448 framebuffer recordings captured directly from the device:
 
-- [Codex terminal animation](screenshots/amoled_18/codex-terminal-animation.mp4)
-- [Codex happy animation](screenshots/amoled_18/codex-happy-animation.mp4)
-- [Codex look-around animation](screenshots/amoled_18/codex-look-around-animation.mp4)
+- [Codex balanced animation](screenshots/amoled_18/codex-animation.mp4)
 - [Cursor animation](screenshots/amoled_18/cursor-animation.mp4)
 
 > **Third-party marks and artwork:** the screenshots and firmware display
@@ -267,7 +267,7 @@ Button layout depends on the board:
 | Button             | Source        | Function                                                                                              |
 | ------------------ | ------------- | ----------------------------------------------------------------------------------------------------- |
 | **Top right** (BOOT) | GPIO 0      | Allow a visible agent approval request; otherwise hold to send Space over BLE                          |
-| **Bottom right** (PWR) | XCA9554 EXIO4 | On Claude or Codex splash: cycle that service's animations. Otherwise: advance to the next screen. Hold 3s + release: pairing mode |
+| **Bottom right** (PWR) | XCA9554 EXIO4 | On Claude, Codex, or Cursor splash: cycle that service's animations. Otherwise: advance to the next screen. Hold 3s + release: pairing mode |
 
 Space (and Shift+Tab where present) go out as standard BLE HID keyboard reports, so they trigger in whatever window has focus on the paired host — not just Claude Code.
 

@@ -31,8 +31,8 @@ def main() -> None:
     args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
-    with serial.Serial(args.port, 115200, timeout=0.25, write_timeout=2) as port:
-        for screen in SCREENS:
+    for screen in SCREENS:
+        with serial.Serial(args.port, 115200, timeout=0.25, write_timeout=2) as port:
             port.reset_input_buffer()
             port.write(f"screen {screen}\n".encode())
             port.flush()

@@ -110,9 +110,7 @@ static lv_obj_t* battery_img;
 static lv_obj_t* header_imgs[3];
 static lv_image_dsc_t battery_dscs[5];
 static lv_image_dsc_t logo_dsc;
-static lv_image_dsc_t codex_header_dsc;
 static lv_image_dsc_t cursor_header_dsc;
-static uint8_t codex_header_buf[80 * 80 * 3];
 static uint8_t cursor_header_buf[80 * 80 * 3];
 
 struct SelectorScreen {
@@ -402,7 +400,7 @@ static void build_selector_screen(lv_obj_t* scr) {
         if (i == 0) {
             icon = splash_mini_create(zone, "idle look around", 100);
         } else if (i == 1) {
-            icon = logo_mini_create_named(zone, "codex terminal", 100);
+            icon = logo_mini_create_named(zone, "codex balanced", 100);
         } else {
             icon = logo_mini_create(zone, LOGO_SCREEN_CURSOR, 100);
         }
@@ -595,7 +593,6 @@ void ui_init(void) {
     lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
 
     init_icon_dsc_rgb565a8(&logo_dsc, LOGO_WIDTH, LOGO_HEIGHT, logo_data);
-    logo_build_image_dsc(LOGO_SCREEN_CODEX, 80, &codex_header_dsc, codex_header_buf);
     logo_build_image_dsc(LOGO_SCREEN_CURSOR, 80, &cursor_header_dsc, cursor_header_buf);
     init_battery_icons();
 
@@ -615,12 +612,21 @@ void ui_init(void) {
         lv_obj_add_event_cb(logo_anim_get_root(), global_click_cb, LV_EVENT_CLICKED, NULL);
     }
 
-    const lv_image_dsc_t* header_srcs[] = { &logo_dsc, &codex_header_dsc, &cursor_header_dsc };
+    const lv_image_dsc_t* header_srcs[] = { &logo_dsc, NULL, &cursor_header_dsc };
     for (int i = 0; i < 3; i++) {
-        header_imgs[i] = lv_image_create(scr);
-        lv_image_set_src(header_imgs[i], header_srcs[i]);
-        lv_obj_set_pos(header_imgs[i], L.margin, L.title_y - 10);
-        lv_obj_add_flag(header_imgs[i], LV_OBJ_FLAG_HIDDEN);
+        if (i == 1) {
+            // Codex header is an animated 80x80 mini (terminal-prompt cursor blink)
+            // instead of a static image. Same position + visibility plumbing as the
+            // others; logo_mini_tick() (called every UI tick) drives the frames.
+            header_imgs[i] = logo_mini_create_named(scr, "codex blink", 80);
+        } else {
+            header_imgs[i] = lv_image_create(scr);
+            lv_image_set_src(header_imgs[i], header_srcs[i]);
+        }
+        if (header_imgs[i]) {
+            lv_obj_set_pos(header_imgs[i], L.margin, L.title_y - 10);
+            lv_obj_add_flag(header_imgs[i], LV_OBJ_FLAG_HIDDEN);
+        }
     }
 
     battery_img = lv_image_create(scr);
@@ -692,6 +698,10 @@ static void tick_usage_anim(UsageScreen* us) {
 void ui_tick_anim(void) {
     if (is_usage_screen(current_screen)) {
         tick_usage_anim(usage_for_screen(current_screen));
+        // Codex usage-screen header is a logo_mini (animated blink), so the
+        // mini tick must run on every usage tick, not only in the "no data"
+        // view_state where tick_usage_anim also calls it.
+        logo_mini_tick();
     }
     if (current_screen == SCREEN_SPLASH_CODEX || current_screen == SCREEN_SPLASH_CURSOR) {
         logo_anim_tick();
