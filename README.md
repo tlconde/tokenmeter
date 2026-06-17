@@ -32,23 +32,17 @@ from top to bottom: **Claude**, **Codex**, and **Cursor**.
 | Codex | ![Codex animation](screenshots/amoled_18/codex-splash.png) | ![Codex usage](screenshots/amoled_18/codex-usage.png) |
 | Cursor | ![Cursor animation](screenshots/amoled_18/cursor-splash.png) | ![Cursor usage](screenshots/amoled_18/cursor-usage.png) |
 
-### Codex animation set
+### Codex animation
 
-The Codex splash uses one consistent blue-purple terminal flower with four
-code-native movement loops. It opens on **Terminal**, rotates automatically every 20
-seconds according to the current Codex usage-rate group, and can be cycled
-manually with the PWR button.
+The Codex splash uses one blue-purple terminal flower with a single balanced
+movement loop — drift, hop, sway, and terminal-prompt blink. The usage screen
+header reuses a smaller blink-only variant of the same mark.
 
-| Terminal | Scan | Compile | Orbit |
-| :------: | :--: | :-----: | :---: |
-| ![Codex terminal animation](screenshots/amoled_18/codex-terminal-animation.gif) | ![Codex scan animation](screenshots/amoled_18/codex-scan-animation.gif) | ![Codex compile animation](screenshots/amoled_18/codex-compile-animation.gif) | ![Codex orbit animation](screenshots/amoled_18/codex-orbit-animation.gif) |
+![Codex balanced animation](screenshots/amoled_18/codex-animation.gif)
 
 Native 368×448 framebuffer recordings captured directly from the device:
 
-- [Codex terminal animation](screenshots/amoled_18/codex-terminal-animation.mp4)
-- [Codex scan animation](screenshots/amoled_18/codex-scan-animation.mp4)
-- [Codex compile animation](screenshots/amoled_18/codex-compile-animation.mp4)
-- [Codex orbit animation](screenshots/amoled_18/codex-orbit-animation.mp4)
+- [Codex balanced animation](screenshots/amoled_18/codex-animation.mp4)
 - [Cursor animation](screenshots/amoled_18/cursor-animation.mp4)
 
 > **Third-party marks and artwork:** the screenshots and firmware display
@@ -273,7 +267,7 @@ Button layout depends on the board:
 | Button             | Source        | Function                                                                                              |
 | ------------------ | ------------- | ----------------------------------------------------------------------------------------------------- |
 | **Top right** (BOOT) | GPIO 0      | Allow a visible agent approval request; otherwise hold to send Space over BLE                          |
-| **Bottom right** (PWR) | XCA9554 EXIO4 | On Claude or Codex splash: cycle that service's animations. Otherwise: advance to the next screen. Hold 3s + release: pairing mode |
+| **Bottom right** (PWR) | XCA9554 EXIO4 | On Claude, Codex, or Cursor splash: cycle that service's animations. Otherwise: advance to the next screen. Hold 3s + release: pairing mode |
 
 Space (and Shift+Tab where present) go out as standard BLE HID keyboard reports, so they trigger in whatever window has focus on the paired host — not just Claude Code.
 

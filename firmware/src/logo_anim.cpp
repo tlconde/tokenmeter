@@ -7,7 +7,7 @@
 #include <string.h>
 #include <esp_heap_caps.h>
 
-#define GRID 20
+#define GRID LOGO_GRID_SIZE
 #define COL_EMPTY 0x0000
 
 static int  cell = 24;
@@ -29,18 +29,11 @@ static uint32_t frame_started_ms = 0;
 static uint32_t last_pick_ms = 0;
 
 #define CODEX_ROTATE_INTERVAL_MS 20000
-#define CODEX_GROUP_COUNT 4
-#define CODEX_GROUP_MAX 2
-
-static const char* CODEX_GROUP_NAMES[CODEX_GROUP_COUNT][CODEX_GROUP_MAX] = {
-    { "codex terminal", "codex scan" },
-    { "codex scan", "codex terminal" },
-    { "codex compile", "codex orbit" },
-    { "codex orbit", "codex compile" },
-};
-static int8_t codex_group_lists[CODEX_GROUP_COUNT][CODEX_GROUP_MAX];
-static uint8_t codex_group_size[CODEX_GROUP_COUNT] = {};
-static uint8_t codex_group_rotation[CODEX_GROUP_COUNT] = {};
+// v2 (deferred): the four-group rate-driven rotation lived here. tokenmeter v1
+// collapses all four codex animations into a single "codex balanced" splash, so
+// pick_for_current_rate() / idle_anim_index_for() ignore the rate group and
+// always return "codex balanced". Re-introduce the rotation tables and the
+// per-group resolve when distinct activity motions ship.
 
 static int anim_index_named(const char* want) {
     for (int i = 0; i < LOGO_ANIM_COUNT; i++) {
@@ -51,7 +44,7 @@ static int anim_index_named(const char* want) {
 
 static int idle_anim_index_for(logo_screen_t which) {
     const char* want =
-        (which == LOGO_SCREEN_CODEX) ? "codex terminal" : "cursor idle";
+        (which == LOGO_SCREEN_CODEX) ? "codex balanced" : "cursor idle";
     int idx = anim_index_named(want);
     if (idx >= 0) return idx;
     return (which == LOGO_SCREEN_CODEX) ? 0 : 1;
@@ -70,21 +63,18 @@ static const logo_anim_def_t* current_anim(void) {
     return &logo_anims[idx];
 }
 
-static bool is_codex_splash_anim(int idx) {
+static bool is_splash_anim_for(int idx, logo_screen_t which) {
     if (idx < 0 || idx >= LOGO_ANIM_COUNT) return false;
     const char* name = logo_anims[idx].name;
-    return name && strncmp(name, "codex ", 6) == 0;
+    if (!name) return false;
+    const char* prefix = (which == LOGO_SCREEN_CODEX) ? "codex " : "cursor ";
+    const size_t plen = (which == LOGO_SCREEN_CODEX) ? 6 : 7;
+    return strncmp(name, prefix, plen) == 0;
 }
 
 static void resolve_codex_groups(void) {
-    for (int group = 0; group < CODEX_GROUP_COUNT; group++) {
-        codex_group_size[group] = 0;
-        for (int slot = 0; slot < CODEX_GROUP_MAX; slot++) {
-            int idx = anim_index_named(CODEX_GROUP_NAMES[group][slot]);
-            codex_group_lists[group][slot] = idx;
-            if (idx >= 0) codex_group_size[group]++;
-        }
-    }
+    // v1: no-op. Group rotation tables removed; "codex balanced" is the only
+    // splash animation. Re-introduce when distinct activity motions ship.
 }
 
 static void render_frame(const uint8_t* cells, const uint16_t* palette) {
@@ -213,11 +203,6 @@ void logo_anim_show(logo_screen_t which) {
         active_anim_index = anim_index_named("cursor splash");
     } else {
         active_anim_index = idle_anim_index_for(LOGO_SCREEN_CODEX);
-        int group = usage_rate_group_codex();
-        if (group < 0 || group >= CODEX_GROUP_COUNT) group = 0;
-        // The splash always opens on the canonical Codex character. The next
-        // timed pick advances to the other animation in the current group.
-        codex_group_rotation[group] = 1;
     }
     cur_frame = 0;
     frame_started_ms = millis();
@@ -232,49 +217,42 @@ void logo_anim_show(logo_screen_t which) {
 }
 
 bool logo_anim_next(void) {
-    if (!active || active_screen != LOGO_SCREEN_CODEX) return false;
+    if (!active) return false;
 
     int start = active_anim_index;
-    if (start < 0) start = idle_anim_index_for(LOGO_SCREEN_CODEX);
+    if (start < 0) start = idle_anim_index_for(active_screen);
     for (int step = 1; step <= LOGO_ANIM_COUNT; step++) {
         int idx = (start + step) % LOGO_ANIM_COUNT;
-        if (!is_codex_splash_anim(idx)) continue;
+        if (!is_splash_anim_for(idx, active_screen)) continue;
         active_anim_index = idx;
         cur_frame = 0;
         frame_started_ms = millis();
         last_pick_ms = frame_started_ms;
         const logo_anim_def_t* a = current_anim();
         if (a && a->frame_count > 0) render_frame(a->frames[0], a->palette);
-        Serial.printf("Codex animation: %s\n", a && a->name ? a->name : "unknown");
+        const char* label =
+            (active_screen == LOGO_SCREEN_CODEX) ? "Codex" : "Cursor";
+        Serial.printf("%s animation: %s\n", label, a && a->name ? a->name : "unknown");
         return idx != start;
     }
     return false;
 }
 
 bool logo_anim_keepalive(void) {
-    if (!active || active_screen != LOGO_SCREEN_CODEX) return false;
+    if (!active) return false;
     last_pick_ms = millis();
     return true;
 }
 
 void logo_anim_pick_for_current_rate(void) {
-    int group = usage_rate_group_codex();
-    if (group < 0 || group >= CODEX_GROUP_COUNT) group = 0;
-    if (codex_group_size[group] == 0) {
-        active_anim_index = idle_anim_index_for(LOGO_SCREEN_CODEX);
-    } else {
-        uint8_t slot =
-            codex_group_rotation[group] % codex_group_size[group];
-        codex_group_rotation[group]++;
-        active_anim_index = codex_group_lists[group][slot];
-    }
+    // v1: only one codex splash animation. Reset to its first frame.
+    active_anim_index = idle_anim_index_for(LOGO_SCREEN_CODEX);
     cur_frame = 0;
     frame_started_ms = millis();
     last_pick_ms = frame_started_ms;
     const logo_anim_def_t* a = current_anim();
     if (a && a->frame_count > 0) render_frame(a->frames[0], a->palette);
-    Serial.printf("Codex rate group %d: %s\n",
-        group, a && a->name ? a->name : "unknown");
+    Serial.printf("Codex animation: %s\n", a && a->name ? a->name : "unknown");
 }
 
 void logo_anim_hide(void) {
@@ -291,7 +269,7 @@ lv_obj_t* logo_anim_get_root(void) {
 }
 
 // ---- Mini animated logos for embedding (selector tiles, idle screens) ----
-#define LOGO_MINI_MAX 4
+#define LOGO_MINI_MAX 6
 
 struct LogoMini {
     lv_obj_t* canvas;
@@ -355,7 +333,7 @@ lv_obj_t* logo_mini_create_named(lv_obj_t* parent, const char* anim_name, int px
 
 lv_obj_t* logo_mini_create(lv_obj_t* parent, logo_screen_t which, int px) {
     const char* anim_name =
-        (which == LOGO_SCREEN_CODEX) ? "codex terminal" : "cursor idle";
+        (which == LOGO_SCREEN_CODEX) ? "codex blink" : "cursor idle";
     return logo_mini_create_named(parent, anim_name, px);
 }
 

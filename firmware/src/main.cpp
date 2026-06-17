@@ -424,6 +424,9 @@ void loop() {
                 } else if (ui_get_current_screen() == SCREEN_SPLASH_CODEX) {
                     Serial.println("Button PWR: next Codex animation");
                     logo_anim_next();
+                } else if (ui_get_current_screen() == SCREEN_SPLASH_CURSOR) {
+                    Serial.println("Button PWR: next Cursor animation");
+                    logo_anim_next();
                 } else {
                     Serial.println("Button PWR: next screen");
                     ui_cycle_screen();

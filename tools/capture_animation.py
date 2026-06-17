@@ -49,8 +49,10 @@ def capture_frame(port: serial.Serial) -> tuple[bytes, int, int, float]:
     started = time.monotonic()
     port.write(b"anim keepalive\n")
     port.flush()
-    while read_line(port, started + 5) != "ANIM_KEEPALIVE_OK":
-        pass
+    while True:
+        line = read_line(port, started + 5)
+        if line in {"ANIM_KEEPALIVE_OK", "ANIM_KEEPALIVE_UNAVAILABLE"}:
+            break
     port.write(b"screenshot\n")
     port.flush()
     deadline = started + 30
